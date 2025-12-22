@@ -118,6 +118,16 @@
     controls.minDistance = 1.6;
     controls.maxDistance = 28;
     controls.maxPolarAngle = Math.PI * 0.49;
+    const followCamState = {
+      active: false,
+      offset: new THREE.Vector3(),
+      baseTarget: controls.target.clone(),
+      targetZ: controls.target.z,
+      bounds: {
+        minZ: -halfPlayLen + 0.35,
+        maxZ: halfPlayLen - 0.35
+      }
+    };
 
     // --- Lights (brighter ambient) ---
     scene.add(new THREE.AmbientLight(0xffffff, 0.45));
@@ -536,6 +546,34 @@
 
     // Apply an impulse in +Z direction.
     let lastImpulse = {x:0,y:0,z:0};
+    const followLerp = 0.12;
+
+    function beginCameraFollow() {
+      followCamState.active = true;
+      followCamState.baseTarget.copy(controls.target);
+      followCamState.offset.copy(camera.position).sub(controls.target);
+      followCamState.targetZ = controls.target.z;
+    }
+
+    function updateCameraFollow(currentSpeed) {
+      if (!followCamState.active) return;
+
+      // When the puck settles, stop following so the user regains full control.
+      if (currentSpeed < 0.02 && puckBody.sleepState === CANNON.Body.SLEEPING) {
+        followCamState.active = false;
+        return;
+      }
+
+      const desiredZ = THREE.MathUtils.clamp(
+        puckBody.position.z,
+        followCamState.bounds.minZ,
+        followCamState.bounds.maxZ
+      );
+
+      followCamState.targetZ = THREE.MathUtils.lerp(followCamState.targetZ, desiredZ, followLerp);
+      controls.target.set(followCamState.baseTarget.x, followCamState.baseTarget.y, followCamState.targetZ);
+      camera.position.copy(controls.target).add(followCamState.offset);
+    }
 
     function startShot() {
       applyParamsFromUI();
@@ -548,6 +586,7 @@
       lastImpulse = {x: impulse.x, y: impulse.y, z: impulse.z};
       puckBody.applyImpulse(impulse, puckBody.position);
       keepPuckOnTable();
+      beginCameraFollow();
     }
 
     ui.startBtn.addEventListener('click', startShot);
@@ -574,11 +613,13 @@
       p0.position.set(puckBody.position.x, puckBody.position.y, puckBody.position.z);
       p0.quaternion.set(puckBody.quaternion.x, puckBody.quaternion.y, puckBody.quaternion.z, puckBody.quaternion.w);
 
+      const v = puckBody.velocity;
+      const p = puckBody.position;
+      const speed = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
+      updateCameraFollow(speed);
+
       // Debug readout
       if (ui?.readout) {
-        const v = puckBody.velocity;
-        const p = puckBody.position;
-        const speed = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
         ui.readout.textContent =
 `puck pos (m):  x=${p.x.toFixed(3)}  y=${p.y.toFixed(3)}  z=${p.z.toFixed(3)}
 puck vel (m/s): x=${v.x.toFixed(3)}  y=${v.y.toFixed(3)}  z=${v.z.toFixed(3)}  |v|=${speed.toFixed(3)}
