@@ -121,8 +121,8 @@
     const followCamState = {
       active: false,
       offset: new THREE.Vector3(),
-      baseTarget: controls.target.clone(),
-      targetZ: controls.target.z,
+      target: controls.target.clone(),
+      velocity: new THREE.Vector3(),
       bounds: {
         minZ: -halfPlayLen + 0.35,
         maxZ: halfPlayLen - 0.35
@@ -546,16 +546,19 @@
 
     // Apply an impulse in +Z direction.
     let lastImpulse = {x:0,y:0,z:0};
-    const followLerp = 0.12;
+    const followSpring = {
+      stiffness: 14,
+      damping: 2.4
+    };
 
     function beginCameraFollow() {
       followCamState.active = true;
-      followCamState.baseTarget.copy(controls.target);
-      followCamState.offset.copy(camera.position).sub(controls.target);
-      followCamState.targetZ = controls.target.z;
+      followCamState.offset.copy(camera.position).sub(p0.position);
+      followCamState.target.copy(controls.target);
+      followCamState.velocity.set(0, 0, 0);
     }
 
-    function updateCameraFollow(currentSpeed) {
+    function updateCameraFollow(currentSpeed, dt) {
       if (!followCamState.active) return;
 
       // When the puck settles, stop following so the user regains full control.
@@ -564,15 +567,20 @@
         return;
       }
 
-      const desiredZ = THREE.MathUtils.clamp(
-        puckBody.position.z,
-        followCamState.bounds.minZ,
-        followCamState.bounds.maxZ
+      const desired = new THREE.Vector3(
+        puckBody.position.x,
+        controls.target.y,
+        THREE.MathUtils.clamp(puckBody.position.z, followCamState.bounds.minZ, followCamState.bounds.maxZ)
       );
 
-      followCamState.targetZ = THREE.MathUtils.lerp(followCamState.targetZ, desiredZ, followLerp);
-      controls.target.set(followCamState.baseTarget.x, followCamState.baseTarget.y, followCamState.targetZ);
-      camera.position.copy(controls.target).add(followCamState.offset);
+      // Critically-damped-ish spring toward the puck.
+      const delta = desired.clone().sub(followCamState.target);
+      followCamState.velocity.addScaledVector(delta, followSpring.stiffness * dt);
+      followCamState.velocity.multiplyScalar(Math.exp(-followSpring.damping * dt));
+      followCamState.target.addScaledVector(followCamState.velocity, dt);
+
+      controls.target.copy(followCamState.target);
+      camera.position.copy(followCamState.target).add(followCamState.offset);
     }
 
     function startShot() {
@@ -616,7 +624,7 @@
       const v = puckBody.velocity;
       const p = puckBody.position;
       const speed = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
-      updateCameraFollow(speed);
+      updateCameraFollow(speed, dt);
 
       // Debug readout
       if (ui?.readout) {
