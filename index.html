@@ -387,6 +387,7 @@
       thickness: 0.55 * IN
     };
     const puckR = puck.diameter * 0.5;
+    const puckSurfaceY = topY + puck.thickness * 0.5;
 
     const puckGeom = new THREE.CylinderGeometry(puckR, puckR, puck.thickness, 48);
     const puckRed  = new THREE.MeshStandardMaterial({ color: 0xbf2f2f, roughness: 0.22, metalness: 0.42 });
@@ -400,7 +401,7 @@
       return m;
     }
 
-    const puckY = topY + puck.thickness * 0.5 + 0.03;
+    const puckY = puckSurfaceY;
 
     const p0 = makePuck(puckRed);
     p0.position.set(0, puckY, startLineZ);
@@ -455,8 +456,8 @@
     });
     puckBody.addShape(puckShape);
 
-    // Spawn slightly above the table to avoid initial interpenetration.
-    puckBody.position.set(p0.position.x, topY + puck.thickness * 0.5 + 0.03, p0.position.z);
+    // Spawn directly on the play surface; we'll clamp Y to avoid any vertical launch.
+    puckBody.position.set(p0.position.x, puckSurfaceY, p0.position.z);
 
     // Prevent tipping: allow yaw only.
     puckBody.angularFactor.set(0, 1, 0);
@@ -512,14 +513,21 @@
       puckBody.torque.set(0, 0, 0);
       puckBody.quaternion.set(0, 0, 0, 1);
 
-      // Spawn a bit higher to avoid any initial interpenetration with the plane.
-      puckBody.position.set(p0.position.x, topY + puck.thickness * 0.5 + 0.03, p0.position.z);
+      // Seat the puck directly on the table surface.
+      puckBody.position.set(p0.position.x, puckSurfaceY, p0.position.z);
 
       puckBody.wakeUp();
 
       // Sync visual immediately (so it's visible at start)
       p0.position.set(puckBody.position.x, puckBody.position.y, puckBody.position.z);
       p0.quaternion.set(puckBody.quaternion.x, puckBody.quaternion.y, puckBody.quaternion.z, puckBody.quaternion.w);
+    }
+
+    function keepPuckOnTable() {
+      // Prevent any upward kick: clamp Y and zero vertical forces/velocity.
+      puckBody.position.y = puckSurfaceY;
+      puckBody.velocity.y = 0;
+      puckBody.force.y = 0;
     }
 
     // Initialize: rest the puck on the table without any motion.
@@ -532,12 +540,14 @@
     function startShot() {
       applyParamsFromUI();
       resetPuckPose();
+      keepPuckOnTable();
 
       const J = Math.max(0, Number(ui.impulse.value)); // N*s
       // Impulse = m*v. For m=0.5kg, J=1.2 => v=2.4 m/s.
       const impulse = new CANNON.Vec3(0, 0, J);
       lastImpulse = {x: impulse.x, y: impulse.y, z: impulse.z};
       puckBody.applyImpulse(impulse, puckBody.position);
+      keepPuckOnTable();
     }
 
     ui.startBtn.addEventListener('click', startShot);
@@ -558,6 +568,7 @@
 
       const dt = clock.getDelta();
       world.step(fixedTimeStep, dt, maxSubSteps);
+      keepPuckOnTable();
 
       // Sync the visual puck mesh with its physics body
       p0.position.set(puckBody.position.x, puckBody.position.y, puckBody.position.z);
