@@ -98,6 +98,12 @@
       <div></div>
       <div></div>
     </div>
+    <div class="hud-row">
+      <div class="hud-label">Camera position</div>
+      <div id="cameraPositionValue" class="hud-value">x=0.00 y=0.00 z=0.00</div>
+      <div></div>
+      <div></div>
+    </div>
   </div>
   <script type="module">
     import * as THREE from 'three';
@@ -241,8 +247,8 @@
     cannon.add(leftWheel, rightWheel);
 
     const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x55606b, roughness: 0.55, metalness: 0.25 });
-    const base = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 1.0), baseMaterial);
-    base.position.set(0, 0.4, 0.1);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 1.25), baseMaterial);
+    base.position.set(0, 0.4, -0.125);
     cannon.add(base);
 
     const carriage = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.5, 0.9), baseMaterial);
@@ -255,11 +261,11 @@
 
     const barrelMaterial = new THREE.MeshStandardMaterial({ color: 0x7d8792, roughness: 0.35, metalness: 0.6 });
     const mainBarrel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.18, 0.22, 2.4, 32),
+      new THREE.CylinderGeometry(0.18, 0.22, 1.8, 32),
       barrelMaterial
     );
     mainBarrel.rotation.x = Math.PI / 2;
-    mainBarrel.position.set(0, 0, -0.6);
+    mainBarrel.position.set(0, 0, -0.45);
 
     const innerBarrel = new THREE.Mesh(
       new THREE.CylinderGeometry(0.12, 0.12, 1.6, 32),
@@ -353,6 +359,7 @@
       gunElevationValue: document.getElementById('gunElevationValue'),
       scalePositionValue: document.getElementById('scalePositionValue'),
       cannonPositionValue: document.getElementById('cannonPositionValue'),
+      cameraPositionValue: document.getElementById('cameraPositionValue'),
       gunRotationDown: document.getElementById('gunRotationDown'),
       gunRotationUp: document.getElementById('gunRotationUp'),
       gunElevationUp: document.getElementById('gunElevationUp'),
@@ -376,8 +383,10 @@
     function updatePositionReadouts() {
       const scalePos = scaleCylinder.position;
       const cannonPos = cannon.position;
+      const cameraPos = camera.position;
       ui.scalePositionValue.textContent = `x=${scalePos.x.toFixed(2)} y=${scalePos.y.toFixed(2)} z=${scalePos.z.toFixed(2)}`;
       ui.cannonPositionValue.textContent = `x=${cannonPos.x.toFixed(2)} y=${cannonPos.y.toFixed(2)} z=${cannonPos.z.toFixed(2)}`;
+      ui.cameraPositionValue.textContent = `x=${cameraPos.x.toFixed(2)} y=${cameraPos.y.toFixed(2)} z=${cameraPos.z.toFixed(2)}`;
     }
 
     ui.gunRotationDown.addEventListener('click', () => {
@@ -472,20 +481,28 @@
 
     const moveSpeed = CONFIG.controls.moveSpeed;
     const moveVector = new THREE.Vector3();
+    const forwardVector = new THREE.Vector3();
+    const rightVector = new THREE.Vector3();
+    const worldUp = new THREE.Vector3(0, 1, 0);
 
     function animate() {
       requestAnimationFrame(animate);
       const dt = clock.getDelta();
       const elapsed = clock.getElapsedTime();
+      const moveForward = (pressedKeys.has('KeyW') ? 1 : 0) - (pressedKeys.has('KeyS') ? 1 : 0);
+      const moveRight = (pressedKeys.has('KeyD') ? 1 : 0) - (pressedKeys.has('KeyA') ? 1 : 0);
       moveVector.set(0, 0, 0);
-      if (pressedKeys.has('KeyW')) moveVector.z -= 1;
-      if (pressedKeys.has('KeyS')) moveVector.z += 1;
-      if (pressedKeys.has('KeyA')) moveVector.x -= 1;
-      if (pressedKeys.has('KeyD')) moveVector.x += 1;
-      if (moveVector.lengthSq() > 0) {
-        moveVector.normalize();
-        camera.position.x += moveVector.x * moveSpeed * dt;
-        camera.position.z += moveVector.z * moveSpeed * dt;
+      if (moveForward !== 0 || moveRight !== 0) {
+        camera.getWorldDirection(forwardVector);
+        forwardVector.y = 0;
+        forwardVector.normalize();
+        rightVector.crossVectors(forwardVector, worldUp).normalize();
+        moveVector.addScaledVector(forwardVector, moveForward);
+        moveVector.addScaledVector(rightVector, moveRight);
+        if (moveVector.lengthSq() > 0) {
+          moveVector.normalize();
+          camera.position.addScaledVector(moveVector, moveSpeed * dt);
+        }
       }
 
       if (cannonAnim.active) {
@@ -534,6 +551,7 @@
       axisLabels.y.lookAt(camera.position);
       axisLabels.z.lookAt(camera.position);
       muzzleFlash.lookAt(camera.position);
+      updatePositionReadouts();
       renderer.render(scene, camera);
     }
     applyCameraOrientation();
