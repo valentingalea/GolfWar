@@ -12,6 +12,50 @@
       overflow: hidden;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
     }
+    #hud {
+      position: fixed;
+      left: 16px;
+      top: 16px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(8, 12, 18, 0.7);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #e6edf5;
+      font-size: 13px;
+      line-height: 1.4;
+      display: grid;
+      gap: 10px;
+      min-width: 220px;
+      backdrop-filter: blur(6px);
+    }
+    .hud-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      align-items: center;
+      gap: 8px;
+    }
+    .hud-label {
+      font-weight: 600;
+      color: #ffffff;
+    }
+    .hud-value {
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.08);
+    }
+    .hud-btn {
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.06);
+      color: #ffffff;
+      cursor: pointer;
+    }
+    .hud-btn:active {
+      transform: translateY(1px);
+    }
     canvas { display: block; }
   </style>
   <script type="importmap">
@@ -23,6 +67,20 @@
   </script>
 </head>
 <body>
+  <div id="hud">
+    <div class="hud-row">
+      <div class="hud-label">Gun rotation</div>
+      <div id="gunRotationValue" class="hud-value">0°</div>
+      <button id="gunRotationDown" class="hud-btn" type="button">&lt;</button>
+      <button id="gunRotationUp" class="hud-btn" type="button">&gt;</button>
+    </div>
+    <div class="hud-row">
+      <div class="hud-label">Gun elevation</div>
+      <div id="gunElevationValue" class="hud-value">0°</div>
+      <button id="gunElevationUp" class="hud-btn" type="button">^</button>
+      <button id="gunElevationDown" class="hud-btn" type="button">\/</button>
+    </div>
+  </div>
   <script type="module">
     import * as THREE from 'three';
 
@@ -107,8 +165,87 @@
 
     camera.lookAt(new THREE.Vector3(1.6, 1.0, 0.2));
 
+    const axisOrigin = new THREE.Vector3(1.6, 1.2, 0.2);
+    const axesHelper = new THREE.AxesHelper(0.6);
+    axesHelper.position.copy(axisOrigin);
+    scene.add(axesHelper);
+
+    function makeAxisLabel(text, color) {
+      const size = 128;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, size, size);
+      ctx.font = 'bold 72px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = color;
+      ctx.fillText(text, size / 2, size / 2);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+      return new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.18), mat);
+    }
+
+    const axisLabels = {
+      x: makeAxisLabel('X', '#ff5b5b'),
+      y: makeAxisLabel('Y', '#53ff74'),
+      z: makeAxisLabel('Z', '#4ea3ff')
+    };
+    axisLabels.x.position.copy(axisOrigin).add(new THREE.Vector3(0.75, 0, 0));
+    axisLabels.y.position.copy(axisOrigin).add(new THREE.Vector3(0, 0.75, 0));
+    axisLabels.z.position.copy(axisOrigin).add(new THREE.Vector3(0, 0, 0.75));
+    scene.add(axisLabels.x, axisLabels.y, axisLabels.z);
+
+    const ui = {
+      gunRotationValue: document.getElementById('gunRotationValue'),
+      gunElevationValue: document.getElementById('gunElevationValue'),
+      gunRotationDown: document.getElementById('gunRotationDown'),
+      gunRotationUp: document.getElementById('gunRotationUp'),
+      gunElevationUp: document.getElementById('gunElevationUp'),
+      gunElevationDown: document.getElementById('gunElevationDown')
+    };
+
+    let gunRotationDeg = THREE.MathUtils.radToDeg(cannon.rotation.y);
+    let gunElevationDeg = -THREE.MathUtils.radToDeg(barrelGroup.rotation.x);
+
+    function applyGunRotation() {
+      cannon.rotation.y = THREE.MathUtils.degToRad(gunRotationDeg);
+      ui.gunRotationValue.textContent = `${gunRotationDeg.toFixed(0)}°`;
+    }
+
+    function applyGunElevation() {
+      barrelGroup.rotation.x = -THREE.MathUtils.degToRad(gunElevationDeg);
+      ui.gunElevationValue.textContent = `${gunElevationDeg.toFixed(0)}°`;
+    }
+
+    ui.gunRotationDown.addEventListener('click', () => {
+      gunRotationDeg -= 5;
+      applyGunRotation();
+    });
+    ui.gunRotationUp.addEventListener('click', () => {
+      gunRotationDeg += 5;
+      applyGunRotation();
+    });
+    ui.gunElevationUp.addEventListener('click', () => {
+      gunElevationDeg += 5;
+      applyGunElevation();
+    });
+    ui.gunElevationDown.addEventListener('click', () => {
+      gunElevationDeg -= 5;
+      applyGunElevation();
+    });
+
+    applyGunRotation();
+    applyGunElevation();
+
     function animate() {
       requestAnimationFrame(animate);
+      axisLabels.x.lookAt(camera.position);
+      axisLabels.y.lookAt(camera.position);
+      axisLabels.z.lookAt(camera.position);
       renderer.render(scene, camera);
     }
     animate();
