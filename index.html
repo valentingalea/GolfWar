@@ -56,6 +56,15 @@
     .hud-btn:active {
       transform: translateY(1px);
     }
+    .hud-input {
+      width: 100%;
+      padding: 4px 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.06);
+      color: #ffffff;
+      font-variant-numeric: tabular-nums;
+    }
     canvas { display: block; }
   </style>
   <script type="importmap">
@@ -84,6 +93,18 @@
       <div class="hud-label">Cannon fire</div>
       <div class="hud-value">Ready</div>
       <button id="fireBtn" class="hud-btn" type="button">Fire</button>
+      <div></div>
+    </div>
+    <div class="hud-row">
+      <div class="hud-label">Projectile velocity</div>
+      <input id="projectileVelocity" class="hud-input" type="number" step="0.5" />
+      <div class="hud-value">m/s</div>
+      <div></div>
+    </div>
+    <div class="hud-row">
+      <div class="hud-label">Projectile mass</div>
+      <input id="projectileMass" class="hud-input" type="number" step="0.1" />
+      <div class="hud-value">kg</div>
       <div></div>
     </div>
     <div class="hud-row">
@@ -146,6 +167,11 @@
         lookSensitivity: 0.0035,
         maxPitchDeg: 85,
         moveSpeed: 3.0
+      },
+      projectile: {
+        velocity: 18,
+        mass: 4.5,
+        radius: 0.12
       }
     };
 
@@ -309,6 +335,11 @@
     muzzleFlash.visible = false;
     barrelGroup.add(muzzleFlash);
 
+    const projectileGeometry = new THREE.SphereGeometry(CONFIG.projectile.radius, 24, 24);
+    const projectileMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35, metalness: 0.1 });
+    const activeProjectiles = [];
+    const gravity = new THREE.Vector3(0, -9.81, 0);
+
     const lookAtTarget = new THREE.Vector3(
       CONFIG.camera.lookAt.x,
       CONFIG.camera.lookAt.y,
@@ -364,8 +395,13 @@
       gunRotationUp: document.getElementById('gunRotationUp'),
       gunElevationUp: document.getElementById('gunElevationUp'),
       gunElevationDown: document.getElementById('gunElevationDown'),
-      fireBtn: document.getElementById('fireBtn')
+      fireBtn: document.getElementById('fireBtn'),
+      projectileVelocity: document.getElementById('projectileVelocity'),
+      projectileMass: document.getElementById('projectileMass')
     };
+
+    ui.projectileVelocity.value = CONFIG.projectile.velocity.toFixed(1);
+    ui.projectileMass.value = CONFIG.projectile.mass.toFixed(1);
 
     let gunRotationDeg = THREE.MathUtils.radToDeg(cannon.rotation.y);
     let gunElevationDeg = -THREE.MathUtils.radToDeg(barrelGroup.rotation.x);
@@ -414,6 +450,31 @@
     const baseInnerBarrelZ = innerBarrel.position.z;
     const baseCannonRockX = cannon.rotation.x;
 
+    function spawnProjectile() {
+      const velocity = Math.max(0, Number(ui.projectileVelocity.value) || 0);
+      const mass = Math.max(0.1, Number(ui.projectileMass.value) || CONFIG.projectile.mass);
+      const projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
+      projectile.castShadow = true;
+      projectile.receiveShadow = true;
+
+      const muzzlePosition = new THREE.Vector3();
+      const muzzleDirection = new THREE.Vector3(0, 0, 1);
+      const barrelQuaternion = new THREE.Quaternion();
+      muzzleFlash.getWorldPosition(muzzlePosition);
+      barrelGroup.getWorldQuaternion(barrelQuaternion);
+      muzzleDirection.applyQuaternion(barrelQuaternion).normalize();
+
+      projectile.position.copy(muzzlePosition).addScaledVector(muzzleDirection, 0.12);
+      projectile.quaternion.copy(barrelQuaternion);
+      scene.add(projectile);
+
+      activeProjectiles.push({
+        mesh: projectile,
+        velocity: muzzleDirection.multiplyScalar(velocity),
+        mass
+      });
+    }
+
     function fireCannon() {
       if (cannonAnim.active) return;
       cannonAnim.active = true;
@@ -421,6 +482,7 @@
       muzzleFlash.visible = true;
       muzzleFlash.material.opacity = 1;
       muzzleFlash.scale.set(1, 1, 1);
+      spawnProjectile();
     }
 
     ui.fireBtn.addEventListener('click', fireCannon);
@@ -544,6 +606,16 @@
           cannon.rotation.x = baseCannonRockX;
           muzzleFlash.material.opacity = 0;
           muzzleFlash.visible = false;
+        }
+      }
+
+      for (let i = activeProjectiles.length - 1; i >= 0; i -= 1) {
+        const projectile = activeProjectiles[i];
+        projectile.velocity.addScaledVector(gravity, dt);
+        projectile.mesh.position.addScaledVector(projectile.velocity, dt);
+        if (projectile.mesh.position.y < -2 || projectile.mesh.position.length() > 120) {
+          scene.remove(projectile.mesh);
+          activeProjectiles.splice(i, 1);
         }
       }
 
