@@ -81,6 +81,12 @@
       <button id="gunElevationDown" class="hud-btn" type="button">\/</button>
     </div>
     <div class="hud-row">
+      <div class="hud-label">Cannon fire</div>
+      <div class="hud-value">Ready</div>
+      <button id="fireBtn" class="hud-btn" type="button">Fire</button>
+      <div></div>
+    </div>
+    <div class="hud-row">
       <div class="hud-label">Scale position</div>
       <div id="scalePositionValue" class="hud-value">x=0.00 y=0.00 z=0.00</div>
       <div></div>
@@ -265,6 +271,38 @@
     barrelGroup.add(mainBarrel, innerBarrel);
     cannon.add(barrelGroup);
 
+    function createMuzzleFlashTexture() {
+      const size = 128;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const gradient = ctx.createRadialGradient(size / 2, size / 2, 6, size / 2, size / 2, size / 2);
+      gradient.addColorStop(0, 'rgba(255,255,210,1)');
+      gradient.addColorStop(0.35, 'rgba(255,190,90,0.85)');
+      gradient.addColorStop(0.7, 'rgba(255,120,40,0.4)');
+      gradient.addColorStop(1, 'rgba(255,120,40,0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      return texture;
+    }
+
+    const muzzleFlash = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.45, 0.45),
+      new THREE.MeshBasicMaterial({
+        map: createMuzzleFlashTexture(),
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        opacity: 0
+      })
+    );
+    muzzleFlash.position.set(0, 0.02, 1.45);
+    muzzleFlash.visible = false;
+    barrelGroup.add(muzzleFlash);
+
     const lookAtTarget = new THREE.Vector3(
       CONFIG.camera.lookAt.x,
       CONFIG.camera.lookAt.y,
@@ -318,7 +356,8 @@
       gunRotationDown: document.getElementById('gunRotationDown'),
       gunRotationUp: document.getElementById('gunRotationUp'),
       gunElevationUp: document.getElementById('gunElevationUp'),
-      gunElevationDown: document.getElementById('gunElevationDown')
+      gunElevationDown: document.getElementById('gunElevationDown'),
+      fireBtn: document.getElementById('fireBtn')
     };
 
     let gunRotationDeg = THREE.MathUtils.radToDeg(cannon.rotation.y);
@@ -357,6 +396,25 @@
       gunElevationDeg -= 5;
       applyGunElevation();
     });
+
+    const cannonAnim = {
+      active: false,
+      startTime: 0,
+      recoilDistance: 0.35
+    };
+    const baseInnerBarrelZ = innerBarrel.position.z;
+    const baseCannonRockX = cannon.rotation.x;
+
+    function fireCannon() {
+      if (cannonAnim.active) return;
+      cannonAnim.active = true;
+      cannonAnim.startTime = clock.getElapsedTime();
+      muzzleFlash.visible = true;
+      muzzleFlash.material.opacity = 1;
+      muzzleFlash.scale.set(1, 1, 1);
+    }
+
+    ui.fireBtn.addEventListener('click', fireCannon);
 
     applyGunRotation();
     applyGunElevation();
@@ -418,6 +476,7 @@
     function animate() {
       requestAnimationFrame(animate);
       const dt = clock.getDelta();
+      const elapsed = clock.getElapsedTime();
       moveVector.set(0, 0, 0);
       if (pressedKeys.has('KeyW')) moveVector.z -= 1;
       if (pressedKeys.has('KeyS')) moveVector.z += 1;
@@ -428,9 +487,53 @@
         camera.position.x += moveVector.x * moveSpeed * dt;
         camera.position.z += moveVector.z * moveSpeed * dt;
       }
+
+      if (cannonAnim.active) {
+        const t = elapsed - cannonAnim.startTime;
+        const recoilDuration = 0.12;
+        const settleDuration = 0.5;
+        const totalDuration = recoilDuration + settleDuration;
+
+        const recoilPhase = Math.min(Math.max(t / recoilDuration, 0), 1);
+        const recoilEase = 1 - Math.pow(1 - recoilPhase, 3);
+        const recoilZ = -cannonAnim.recoilDistance * recoilEase;
+
+        let settleZ = 0;
+        let rock = -0.05 * recoilEase;
+        if (t > recoilDuration) {
+          const settleT = (t - recoilDuration) / settleDuration;
+          const damp = Math.exp(-4 * settleT);
+          settleZ = cannonAnim.recoilDistance * 0.25 * damp * Math.sin(settleT * Math.PI * 3);
+          rock = 0.06 * damp * Math.sin(settleT * Math.PI * 2.2);
+        }
+
+        innerBarrel.position.z = baseInnerBarrelZ + recoilZ + settleZ;
+        cannon.rotation.x = baseCannonRockX + rock;
+
+        if (t < 0.12) {
+          const flashFade = 1 - t / 0.12;
+          muzzleFlash.material.opacity = flashFade;
+          const flashScale = 1 + (1 - flashFade) * 0.6;
+          muzzleFlash.scale.set(flashScale, flashScale, flashScale);
+          muzzleFlash.visible = true;
+        } else {
+          muzzleFlash.material.opacity = 0;
+          muzzleFlash.visible = false;
+        }
+
+        if (t >= totalDuration) {
+          cannonAnim.active = false;
+          innerBarrel.position.z = baseInnerBarrelZ;
+          cannon.rotation.x = baseCannonRockX;
+          muzzleFlash.material.opacity = 0;
+          muzzleFlash.visible = false;
+        }
+      }
+
       axisLabels.x.lookAt(camera.position);
       axisLabels.y.lookAt(camera.position);
       axisLabels.z.lookAt(camera.position);
+      muzzleFlash.lookAt(camera.position);
       renderer.render(scene, camera);
     }
     applyCameraOrientation();

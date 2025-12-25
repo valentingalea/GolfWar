@@ -46,20 +46,14 @@
       <input id="impulse" type="number" step="0.1" />
 
       <div></div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button id="startBtn" style="
-          padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);
-          background: rgba(255,255,255,0.08); color:#fff; font-weight:600; cursor:pointer;
-        ">Start</button>
-        <button id="fireBtn" style="
-          padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);
-          background: rgba(255,255,255,0.12); color:#fff; font-weight:600; cursor:pointer;
-        ">Fire</button>
-        <button id="resetBtn" style="
-          padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);
-          background: rgba(255,255,255,0.05); color:#fff; font-weight:600; cursor:pointer;
-        ">Reset</button>
-      </div>
+      <button id="startBtn" style="
+        padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);
+        background: rgba(255,255,255,0.08); color:#fff; font-weight:600; cursor:pointer;
+      ">Start</button>
+      <button id="resetBtn" style="
+        padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);
+        background: rgba(255,255,255,0.05); color:#fff; font-weight:600; cursor:pointer;
+      ">Reset</button>
     </div>
 
     <div id="readout" style="margin-top:10px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:12px; white-space:pre;"></div>
@@ -402,93 +396,6 @@
     addZoneNumbers(-1);
     addZoneNumbers(+1);
 
-    // --- Cannon prop + firing animation ---
-    const cannonPivot = new THREE.Group();
-    cannonPivot.position.set(halfPlayW + 0.22, topY + 0.02, startLineZ - 0.12);
-    table.add(cannonPivot);
-
-    const cannon = new THREE.Group();
-    cannonPivot.add(cannon);
-
-    const cannonMetal = new THREE.MeshStandardMaterial({
-      color: 0x2f3138,
-      roughness: 0.35,
-      metalness: 0.8
-    });
-    const cannonDark = new THREE.MeshStandardMaterial({
-      color: 0x1a1c20,
-      roughness: 0.45,
-      metalness: 0.55
-    });
-
-    const barrelRadius = 0.06;
-    const barrelLength = 0.34;
-    const barrelGeom = new THREE.CylinderGeometry(barrelRadius, barrelRadius * 1.05, barrelLength, 24);
-    const barrel = new THREE.Mesh(barrelGeom, cannonMetal);
-    barrel.rotation.x = Math.PI / 2;
-    barrel.castShadow = true;
-    barrel.receiveShadow = true;
-    cannon.add(barrel);
-
-    const pistonRadius = 0.042;
-    const pistonLength = 0.2;
-    const pistonGeom = new THREE.CylinderGeometry(pistonRadius, pistonRadius * 0.98, pistonLength, 18);
-    const piston = new THREE.Mesh(pistonGeom, cannonDark);
-    piston.rotation.x = Math.PI / 2;
-    piston.castShadow = true;
-    piston.receiveShadow = true;
-    piston.position.z = -0.02;
-    cannon.add(piston);
-
-    const cradle = new THREE.Mesh(
-      new THREE.BoxGeometry(0.18, 0.03, 0.22),
-      new THREE.MeshStandardMaterial({ color: 0x3b2a1d, roughness: 0.8, metalness: 0.05 })
-    );
-    cradle.position.y = -0.06;
-    cradle.castShadow = true;
-    cradle.receiveShadow = true;
-    cannon.add(cradle);
-
-    function makeMuzzleFlashTexture() {
-      const size = 128;
-      const canvas = document.createElement('canvas');
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext('2d');
-      const grad = ctx.createRadialGradient(size / 2, size / 2, 6, size / 2, size / 2, size / 2);
-      grad.addColorStop(0, 'rgba(255,255,200,1)');
-      grad.addColorStop(0.3, 'rgba(255,200,80,0.9)');
-      grad.addColorStop(0.6, 'rgba(255,120,40,0.45)');
-      grad.addColorStop(1, 'rgba(255,120,40,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, size, size);
-      const tex = new THREE.CanvasTexture(canvas);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      return tex;
-    }
-
-    const muzzleFlash = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.14, 0.14),
-      new THREE.MeshBasicMaterial({
-        map: makeMuzzleFlashTexture(),
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        opacity: 0
-      })
-    );
-    muzzleFlash.position.set(0, 0.02, barrelLength * 0.5 + 0.04);
-    muzzleFlash.visible = false;
-    cannon.add(muzzleFlash);
-
-    const cannonAnim = {
-      active: false,
-      startTime: 0,
-      recoil: 0.07
-    };
-    const basePistonZ = piston.position.z;
-    const baseRockX = cannonPivot.rotation.x;
-
     // --- Pucks (regulation-ish) ---
     const puck = {
       diameter: (2 + 5/16) * IN,
@@ -587,7 +494,6 @@
       friction: document.getElementById('friction'),
       impulse: document.getElementById('impulse'),
       startBtn: document.getElementById('startBtn'),
-      fireBtn: document.getElementById('fireBtn'),
       resetBtn: document.getElementById('resetBtn'),
       readout: document.getElementById('readout')
     };
@@ -687,17 +593,7 @@
       beginCameraFollow();
     }
 
-    function fireCannon() {
-      if (cannonAnim.active) return;
-      cannonAnim.active = true;
-      cannonAnim.startTime = clock.getElapsedTime();
-      muzzleFlash.visible = true;
-      muzzleFlash.material.opacity = 1;
-      muzzleFlash.scale.set(1, 1, 1);
-    }
-
     ui.startBtn.addEventListener('click', startShot);
-    ui.fireBtn?.addEventListener('click', fireCannon);
     ui.resetBtn?.addEventListener('click', () => { window.location.reload(); });
 
     const sheen = new THREE.Mesh(
@@ -714,7 +610,6 @@
       requestAnimationFrame(animate);
 
       const dt = clock.getDelta();
-      const elapsed = clock.getElapsedTime();
       world.step(fixedTimeStep, dt, maxSubSteps);
       keepPuckOnTable();
 
@@ -740,50 +635,6 @@ last impulse (N·s): x=${lastImpulse.x.toFixed(3)} y=${lastImpulse.y.toFixed(3)}
       xLab.lookAt(camera.position);
       yLab.lookAt(camera.position);
       zLab.lookAt(camera.position);
-      muzzleFlash.lookAt(camera.position);
-
-      if (cannonAnim.active) {
-        const t = elapsed - cannonAnim.startTime;
-        const recoilDuration = 0.14;
-        const settleDuration = 0.45;
-        const totalDuration = recoilDuration + settleDuration;
-
-        const recoilPhase = Math.min(Math.max(t / recoilDuration, 0), 1);
-        const recoilEase = 1 - Math.pow(1 - recoilPhase, 3);
-        const recoilZ = -cannonAnim.recoil * recoilEase;
-
-        let settleZ = 0;
-        let rock = 0;
-        if (t > recoilDuration) {
-          const settleT = (t - recoilDuration) / settleDuration;
-          const damp = Math.exp(-4 * settleT);
-          const oscillation = Math.sin(settleT * Math.PI * 3);
-          settleZ = cannonAnim.recoil * 0.35 * damp * oscillation;
-          rock = 0.08 * damp * Math.sin(settleT * Math.PI * 2.2);
-        }
-
-        piston.position.z = basePistonZ + recoilZ + settleZ;
-        cannonPivot.rotation.x = baseRockX + rock;
-
-        if (t < 0.12) {
-          const flashFade = 1 - t / 0.12;
-          muzzleFlash.material.opacity = flashFade;
-          const flashScale = 1 + (1 - flashFade) * 0.6;
-          muzzleFlash.scale.set(flashScale, flashScale, flashScale);
-          muzzleFlash.visible = true;
-        } else {
-          muzzleFlash.material.opacity = 0;
-          muzzleFlash.visible = false;
-        }
-
-        if (t >= totalDuration) {
-          cannonAnim.active = false;
-          piston.position.z = basePistonZ;
-          cannonPivot.rotation.x = baseRockX;
-          muzzleFlash.material.opacity = 0;
-          muzzleFlash.visible = false;
-        }
-      }
 
       controls.update();
       renderer.render(scene, camera);
