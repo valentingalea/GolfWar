@@ -102,7 +102,8 @@
         near: 0.1,
         far: 120,
         position: { x: 0, y: 1.65, z: 8 },
-        lookAt: { x: 0, y: 0, z: 0 }
+        lookAt: { x: 0, y: 0, z: 0 },
+        yawOffsetDeg: 180
       },
       ground: {
         size: 80,
@@ -367,6 +368,7 @@
       .normalize();
     let yaw = Math.atan2(lookDirection.x, lookDirection.z);
     let pitch = Math.asin(THREE.MathUtils.clamp(lookDirection.y, -1, 1));
+    yaw += THREE.MathUtils.degToRad(CONFIG.camera.yawOffsetDeg);
     const lookSensitivity = CONFIG.controls.lookSensitivity;
     const maxPitch = THREE.MathUtils.degToRad(CONFIG.controls.maxPitchDeg);
     let isDragging = false;
