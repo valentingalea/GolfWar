@@ -39,7 +39,7 @@
     const eyeHeight = 1.65;
     camera.position.set(1.4, eyeHeight, 5.6);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.75));
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.1);
     keyLight.position.set(6, 8, 4);
     scene.add(keyLight);
@@ -60,6 +60,7 @@
 
     const cannon = new THREE.Group();
     cannon.position.set(2.2, 0, 0);
+    cannon.rotation.y = Math.PI;
     cannon.scale.set(1.5, 1.5, 1.5);
     scene.add(cannon);
 
@@ -74,8 +75,8 @@
     cannon.add(leftWheel, rightWheel);
 
     const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x55606b, roughness: 0.55, metalness: 0.25 });
-    const base = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 1.2), baseMaterial);
-    base.position.set(0, 0.45, 0.1);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 1.0), baseMaterial);
+    base.position.set(0, 0.4, 0.1);
     cannon.add(base);
 
     const carriage = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.5, 0.9), baseMaterial);
