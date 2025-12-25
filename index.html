@@ -152,11 +152,11 @@
       new THREE.CylinderGeometry(0.18, 0.18, 1.8, 32),
       new THREE.MeshStandardMaterial({ color: 0x4ea3ff, roughness: 0.4, metalness: 0.2 })
     );
-    scaleCylinder.position.set(-6.4, 0.9, 0.6);
+    scaleCylinder.position.set(-3.2, 0.9, 0.6);
     scene.add(scaleCylinder);
 
     const cannon = new THREE.Group();
-    cannon.position.set(7.2, 0, 0);
+    cannon.position.set(3.2, 0, 0);
     cannon.rotation.y = Math.PI;
     cannon.scale.set(1.5, 1.5, 1.5);
     scene.add(cannon);
@@ -204,7 +204,7 @@
 
     camera.lookAt(new THREE.Vector3(0, 0, 0));
 
-    const axisOrigin = new THREE.Vector3(0, 0, 0);
+    const axisOrigin = new THREE.Vector3(0, 0.6, 0);
     const axesHelper = new THREE.AxesHelper(0.6);
     axesHelper.position.copy(axisOrigin);
     scene.add(axesHelper);
@@ -290,13 +290,77 @@
     applyGunElevation();
     updatePositionReadouts();
 
+    camera.rotation.order = 'YXZ';
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    let yaw = Math.atan2(forward.x, forward.z);
+    let pitch = Math.asin(THREE.MathUtils.clamp(forward.y, -1, 1));
+    const lookSensitivity = 0.0035;
+    const maxPitch = THREE.MathUtils.degToRad(85);
+    let isDragging = false;
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+
+    function applyCameraOrientation() {
+      camera.rotation.y = yaw;
+      camera.rotation.x = pitch;
+    }
+
+    renderer.domElement.addEventListener('mousedown', (event) => {
+      if (event.button !== 0) return;
+      if (event.target.closest('#hud')) return;
+      isDragging = true;
+      lastMouseX = event.clientX;
+      lastMouseY = event.clientY;
+    });
+
+    window.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+
+    window.addEventListener('mousemove', (event) => {
+      if (!isDragging) return;
+      const dx = event.clientX - lastMouseX;
+      const dy = event.clientY - lastMouseY;
+      lastMouseX = event.clientX;
+      lastMouseY = event.clientY;
+      yaw -= dx * lookSensitivity;
+      pitch -= dy * lookSensitivity;
+      pitch = THREE.MathUtils.clamp(pitch, -maxPitch, maxPitch);
+      applyCameraOrientation();
+    });
+
+    const pressedKeys = new Set();
+    window.addEventListener('keydown', (event) => {
+      pressedKeys.add(event.code);
+    });
+    window.addEventListener('keyup', (event) => {
+      pressedKeys.delete(event.code);
+    });
+
+    const moveSpeed = 3.0;
+    const moveVector = new THREE.Vector3();
+
     function animate() {
       requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+      moveVector.set(0, 0, 0);
+      if (pressedKeys.has('KeyW')) moveVector.y += 1;
+      if (pressedKeys.has('KeyS')) moveVector.y -= 1;
+      if (pressedKeys.has('KeyA')) moveVector.x -= 1;
+      if (pressedKeys.has('KeyD')) moveVector.x += 1;
+      if (moveVector.lengthSq() > 0) {
+        moveVector.normalize();
+        camera.position.x += moveVector.x * moveSpeed * dt;
+        camera.position.y += moveVector.y * moveSpeed * dt;
+      }
       axisLabels.x.lookAt(camera.position);
       axisLabels.y.lookAt(camera.position);
       axisLabels.z.lookAt(camera.position);
       renderer.render(scene, camera);
     }
+    applyCameraOrientation();
+    const clock = new THREE.Clock();
     animate();
 
     window.addEventListener('resize', () => {
