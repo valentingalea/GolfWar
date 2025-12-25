@@ -80,6 +80,18 @@
       <button id="gunElevationUp" class="hud-btn" type="button">^</button>
       <button id="gunElevationDown" class="hud-btn" type="button">\/</button>
     </div>
+    <div class="hud-row">
+      <div class="hud-label">Scale position</div>
+      <div id="scalePositionValue" class="hud-value">x=0.00 y=0.00 z=0.00</div>
+      <div></div>
+      <div></div>
+    </div>
+    <div class="hud-row">
+      <div class="hud-label">Cannon position</div>
+      <div id="cannonPositionValue" class="hud-value">x=0.00 y=0.00 z=0.00</div>
+      <div></div>
+      <div></div>
+    </div>
   </div>
   <script type="module">
     import * as THREE from 'three';
@@ -102,9 +114,36 @@
     keyLight.position.set(6, 8, 4);
     scene.add(keyLight);
 
+    function createCheckerTexture() {
+      const size = 256;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const square = size / 2;
+      ctx.fillStyle = '#101724';
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = '#0b111b';
+      ctx.fillRect(0, 0, square, square);
+      ctx.fillRect(square, square, square, square);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(80, 80);
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return texture;
+    }
+
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(80, 80),
-      new THREE.MeshStandardMaterial({ color: 0x111824, roughness: 0.95, metalness: 0.05 })
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.95,
+        metalness: 0.05,
+        map: createCheckerTexture()
+      })
     );
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
@@ -202,6 +241,8 @@
     const ui = {
       gunRotationValue: document.getElementById('gunRotationValue'),
       gunElevationValue: document.getElementById('gunElevationValue'),
+      scalePositionValue: document.getElementById('scalePositionValue'),
+      cannonPositionValue: document.getElementById('cannonPositionValue'),
       gunRotationDown: document.getElementById('gunRotationDown'),
       gunRotationUp: document.getElementById('gunRotationUp'),
       gunElevationUp: document.getElementById('gunElevationUp'),
@@ -219,6 +260,13 @@
     function applyGunElevation() {
       barrelGroup.rotation.x = -THREE.MathUtils.degToRad(gunElevationDeg);
       ui.gunElevationValue.textContent = `${gunElevationDeg.toFixed(0)}°`;
+    }
+
+    function updatePositionReadouts() {
+      const scalePos = scaleCylinder.position;
+      const cannonPos = cannon.position;
+      ui.scalePositionValue.textContent = `x=${scalePos.x.toFixed(2)} y=${scalePos.y.toFixed(2)} z=${scalePos.z.toFixed(2)}`;
+      ui.cannonPositionValue.textContent = `x=${cannonPos.x.toFixed(2)} y=${cannonPos.y.toFixed(2)} z=${cannonPos.z.toFixed(2)}`;
     }
 
     ui.gunRotationDown.addEventListener('click', () => {
@@ -240,6 +288,7 @@
 
     applyGunRotation();
     applyGunElevation();
+    updatePositionReadouts();
 
     function animate() {
       requestAnimationFrame(animate);
