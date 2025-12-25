@@ -342,11 +342,11 @@
     }
 
     ui.gunRotationDown.addEventListener('click', () => {
-      gunRotationDeg -= 5;
+      gunRotationDeg += 5;
       applyGunRotation();
     });
     ui.gunRotationUp.addEventListener('click', () => {
-      gunRotationDeg += 5;
+      gunRotationDeg -= 5;
       applyGunRotation();
     });
     ui.gunElevationUp.addEventListener('click', () => {
