@@ -23,6 +23,100 @@
   </script>
 </head>
 <body>
-  <script type="module" src="./cannon.js"></script>
+  <script type="module">
+    import * as THREE from 'three';
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x0b0f14, 8, 45);
+
+    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 120);
+    const eyeHeight = 1.65;
+    camera.position.set(0, eyeHeight, 4.2);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.1);
+    keyLight.position.set(6, 8, 4);
+    scene.add(keyLight);
+
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(80, 80),
+      new THREE.MeshStandardMaterial({ color: 0x111824, roughness: 0.95, metalness: 0.05 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    const scaleCylinder = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.18, 0.18, 1.8, 32),
+      new THREE.MeshStandardMaterial({ color: 0x4ea3ff, roughness: 0.4, metalness: 0.2 })
+    );
+    scaleCylinder.position.set(-1.4, 0.9, 0.6);
+    scene.add(scaleCylinder);
+
+    const cannon = new THREE.Group();
+    cannon.position.set(2.2, 0, 0);
+    cannon.scale.set(1.5, 1.5, 1.5);
+    scene.add(cannon);
+
+    const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x2d2d2d, roughness: 0.7, metalness: 0.1 });
+    const wheelGeometry = new THREE.CylinderGeometry(0.55, 0.55, 0.18, 32);
+    const leftWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+    leftWheel.rotation.z = Math.PI / 2;
+    leftWheel.position.set(-0.75, 0.55, 0.25);
+    const rightWheel = leftWheel.clone();
+    rightWheel.position.x = 0.75;
+
+    cannon.add(leftWheel, rightWheel);
+
+    const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x55606b, roughness: 0.55, metalness: 0.25 });
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 1.2), baseMaterial);
+    base.position.set(0, 0.45, 0.1);
+    cannon.add(base);
+
+    const carriage = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.5, 0.9), baseMaterial);
+    carriage.position.set(0, 0.95, 0.05);
+    cannon.add(carriage);
+
+    const barrelGroup = new THREE.Group();
+    barrelGroup.position.set(0, 1.5, 0.0);
+    barrelGroup.rotation.x = -THREE.MathUtils.degToRad(40);
+
+    const barrelMaterial = new THREE.MeshStandardMaterial({ color: 0x7d8792, roughness: 0.35, metalness: 0.6 });
+    const mainBarrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.18, 0.22, 2.4, 32),
+      barrelMaterial
+    );
+    mainBarrel.rotation.x = Math.PI / 2;
+    mainBarrel.position.set(0, 0, -0.6);
+
+    const innerBarrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 1.6, 32),
+      barrelMaterial
+    );
+    innerBarrel.rotation.x = Math.PI / 2;
+    innerBarrel.position.set(0, 0, 0.5);
+
+    barrelGroup.add(mainBarrel, innerBarrel);
+    cannon.add(barrelGroup);
+
+    camera.lookAt(new THREE.Vector3(-1.4, 1.0, 0.2));
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
 </body>
 </html>
