@@ -12,6 +12,24 @@
       overflow: hidden;
     }
     canvas { display: block; }
+    #heightmap-debug {
+      position: fixed;
+      right: 16px;
+      top: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      background: #000;
+    }
+    #heightmap-info {
+      position: fixed;
+      right: 16px;
+      top: 160px;
+      padding: 8px;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      font-family: monospace;
+      font-size: 11px;
+      border-radius: 4px;
+    }
     #hud {
       position: fixed;
       left: 16px;
@@ -151,24 +169,36 @@
       <span class="hud-label">Cam Rot</span>
       <span id="camRotValue" class="hud-value hud-readonly">0°, 0°</span>
     </div>
+    <div class="hud-row">
+      <label class="hud-label" style="cursor:pointer;">
+        <input type="checkbox" id="flyingCam" style="margin-right:6px;" />
+        Flying Camera
+      </label>
+    </div>
+    <div class="hud-divider"></div>
+    <div class="hud-row">
+      <span class="hud-label">Terrain Y</span>
+      <input id="terrainYInput" class="hud-input" type="number" value="-5" step="1" />
+    </div>
   </div>
+  <canvas id="heightmap-debug" width="128" height="128"></canvas>
+  <div id="heightmap-info"></div>
   <script type="module">
     import * as THREE from 'three';
+    import {
+      generateHeightmap,
+      getTerrainColor,
+      GOLF_TERRAIN_CONFIG
+    } from './terrain-heightmap.js';
 
     const CONFIG = {
       camera: {
         fov: 65,
         near: 0.1,
-        far: 500,
+        far: 1000,
         position: { x: 1.5, y: 1.6, z: 2.2 },
         initialYawDeg: 356,
         initialPitchDeg: 0
-      },
-      ground: {
-        size: 1000,
-        tileSize: 1,
-        colorA: '#3a3a3a',
-        colorB: '#2a2a2a'
       },
       axis: {
         origin: { x: 0, y: 0.5, z: 0 },
@@ -180,6 +210,13 @@
         lookSensitivity: 0.003,
         maxPitchDeg: 89,
         moveSpeed: 5.0
+      },
+      terrain: {
+        worldSize: 150,       // Terrain size in world units
+        resolution: 48,       // Geometry resolution (vertices per side) - low for low-poly look
+        offsetX: 0,           // Center terrain on X
+        offsetY: -5,          // Push terrain down
+        offsetZ: -60          // Push terrain into the distance (negative Z is forward)
       }
     };
 
@@ -213,42 +250,6 @@
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(10, 20, 10);
     scene.add(directionalLight);
-
-    // Create checkerboard texture
-    function createCheckerTexture() {
-      const size = 256;
-      const canvas = document.createElement('canvas');
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext('2d');
-      const square = size / 2;
-      ctx.fillStyle = CONFIG.ground.colorA;
-      ctx.fillRect(0, 0, size, size);
-      ctx.fillStyle = CONFIG.ground.colorB;
-      ctx.fillRect(0, 0, square, square);
-      ctx.fillRect(square, square, square, square);
-
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.wrapS = THREE.RepeatWrapping;
-      texture.wrapT = THREE.RepeatWrapping;
-      const repeat = CONFIG.ground.size / CONFIG.ground.tileSize;
-      texture.repeat.set(repeat, repeat);
-      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      return texture;
-    }
-
-    // Ground plane
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(CONFIG.ground.size, CONFIG.ground.size),
-      new THREE.MeshStandardMaterial({
-        map: createCheckerTexture(),
-        roughness: 0.9,
-        metalness: 0.1
-      })
-    );
-    ground.rotation.x = -Math.PI / 2;
-    scene.add(ground);
 
     // Axis helper at origin
     const axisOrigin = new THREE.Vector3(
@@ -304,6 +305,172 @@
     labelZ.position.copy(axisOrigin).add(new THREE.Vector3(0, 0, CONFIG.axis.labelOffset));
 
     scene.add(labelX, labelY, labelZ);
+
+    // ========== TERRAIN GENERATION ==========
+    function createTerrain() {
+      const { worldSize, resolution, offsetX, offsetY, offsetZ } = CONFIG.terrain;
+
+      // Generate heightmap data
+      const heightmap = generateHeightmap({
+        ...GOLF_TERRAIN_CONFIG,
+        width: 128,
+        height: 128
+      });
+
+      // Create geometry
+      const geometry = new THREE.BufferGeometry();
+      const vertices = [];
+      const colors = [];
+      const indices = [];
+
+      const segmentsX = resolution - 1;
+      const segmentsZ = resolution - 1;
+      const segmentWidth = worldSize / segmentsX;
+      const segmentDepth = worldSize / segmentsZ;
+
+      // Generate vertices with heights from heightmap
+      for (let z = 0; z < resolution; z++) {
+        for (let x = 0; x < resolution; x++) {
+          // Normalized coordinates (0-1)
+          const u = x / (resolution - 1);
+          const v = z / (resolution - 1);
+
+          // World position
+          const worldX = (u - 0.5) * worldSize + offsetX;
+          const worldZ = (v - 0.5) * worldSize + offsetZ;
+
+          // Get height from heightmap
+          const height = heightmap.getHeightInterpolated(u, v);
+
+          vertices.push(worldX, height, worldZ);
+
+          // Get color based on normalized height
+          const normalizedHeight = (height - heightmap.minHeight) /
+            (heightmap.maxHeight - heightmap.minHeight);
+          const color = getTerrainColor(normalizedHeight);
+
+          // Convert hex color to RGB (0-1)
+          colors.push(
+            ((color >> 16) & 0xff) / 255,
+            ((color >> 8) & 0xff) / 255,
+            (color & 0xff) / 255
+          );
+        }
+      }
+
+      // Generate indices for triangles (low-poly flat shading)
+      for (let z = 0; z < segmentsZ; z++) {
+        for (let x = 0; x < segmentsX; x++) {
+          const a = z * resolution + x;
+          const b = z * resolution + x + 1;
+          const c = (z + 1) * resolution + x;
+          const d = (z + 1) * resolution + x + 1;
+
+          // Two triangles per quad
+          indices.push(a, c, b);
+          indices.push(b, c, d);
+        }
+      }
+
+      // Convert to non-indexed geometry for flat shading
+      const positionArray = new Float32Array(indices.length * 3);
+      const colorArray = new Float32Array(indices.length * 3);
+
+      for (let i = 0; i < indices.length; i++) {
+        const idx = indices[i];
+        positionArray[i * 3] = vertices[idx * 3];
+        positionArray[i * 3 + 1] = vertices[idx * 3 + 1];
+        positionArray[i * 3 + 2] = vertices[idx * 3 + 2];
+
+        colorArray[i * 3] = colors[idx * 3];
+        colorArray[i * 3 + 1] = colors[idx * 3 + 1];
+        colorArray[i * 3 + 2] = colors[idx * 3 + 2];
+      }
+
+      geometry.setAttribute('position', new THREE.BufferAttribute(positionArray, 3));
+      geometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
+      geometry.computeVertexNormals();
+
+      // Create material with vertex colors and flat shading for low-poly look
+      const material = new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        flatShading: true,
+        roughness: 0.8,
+        metalness: 0.1,
+        side: THREE.DoubleSide  // Render both sides for debugging
+      });
+
+      const terrain = new THREE.Mesh(geometry, material);
+      terrain.position.y = offsetY;  // Apply vertical offset
+      terrain.receiveShadow = true;
+
+      // Debug: log terrain bounds
+      geometry.computeBoundingBox();
+      console.log('Terrain bounds:', geometry.boundingBox);
+      console.log('Heightmap range:', heightmap.minHeight, 'to', heightmap.maxHeight);
+      console.log('Vertex count:', positionArray.length / 3);
+
+      // Add wireframe for debugging
+      const wireframeMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.1
+      });
+      const wireframe = new THREE.Mesh(geometry, wireframeMaterial);
+      terrain.add(wireframe);
+
+      return { mesh: terrain, heightmap };
+    }
+
+    const terrainData = createTerrain();
+    scene.add(terrainData.mesh);
+
+    // ========== HEIGHTMAP DEBUG OVERLAY ==========
+    function renderHeightmapDebug(heightmap) {
+      const canvas = document.getElementById('heightmap-debug');
+      const ctx = canvas.getContext('2d');
+      const { width, height, data, minHeight, maxHeight } = heightmap;
+
+      canvas.width = width;
+      canvas.height = height;
+
+      const imageData = ctx.createImageData(width, height);
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const h = data[y * width + x];
+          const normalized = (h - minHeight) / (maxHeight - minHeight);
+          const color = getTerrainColor(normalized);
+
+          const idx = (y * width + x) * 4;
+          imageData.data[idx] = (color >> 16) & 0xff;     // R
+          imageData.data[idx + 1] = (color >> 8) & 0xff;  // G
+          imageData.data[idx + 2] = color & 0xff;         // B
+          imageData.data[idx + 3] = 255;                  // A
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+
+      // Update info panel
+      const { worldSize, resolution, offsetX, offsetY, offsetZ } = CONFIG.terrain;
+      const infoEl = document.getElementById('heightmap-info');
+      infoEl.innerHTML = `
+        <b>Terrain Debug</b><br>
+        Heightmap: ${width}x${height}<br>
+        Min H: ${minHeight.toFixed(2)}<br>
+        Max H: ${maxHeight.toFixed(2)}<br>
+        World Size: ${worldSize}<br>
+        Resolution: ${resolution}x${resolution}<br>
+        <b>Position:</b><br>
+        X: ${-worldSize/2 + offsetX} to ${worldSize/2 + offsetX}<br>
+        Y: ${offsetY}<br>
+        Z: ${-worldSize/2 + offsetZ} to ${worldSize/2 + offsetZ}
+      `;
+    }
+
+    renderHeightmapDebug(terrainData.heightmap);
 
     // ========== HOWITZER MODEL ==========
     const howitzer = new THREE.Group();
@@ -652,6 +819,21 @@
     const fireBtn = document.getElementById('fireBtn');
     const camPosValue = document.getElementById('camPosValue');
     const camRotValue = document.getElementById('camRotValue');
+    const flyingCamCheckbox = document.getElementById('flyingCam');
+    const terrainYInput = document.getElementById('terrainYInput');
+
+    // Flying camera mode
+    let flyingCameraEnabled = false;
+    flyingCamCheckbox.addEventListener('change', (e) => {
+      flyingCameraEnabled = e.target.checked;
+    });
+
+    // Terrain Y control
+    terrainYInput.addEventListener('input', () => {
+      const newY = parseFloat(terrainYInput.value) || 0;
+      terrainData.mesh.position.y = newY;
+      CONFIG.terrain.offsetY = newY;
+    });
 
     function fireProjectile() {
       const velocity = parseFloat(velocityInput.value) || 20;
@@ -761,13 +943,20 @@
       const moveRight = (pressedKeys.has('KeyD') ? 1 : 0) - (pressedKeys.has('KeyA') ? 1 : 0);
 
       if (moveForward !== 0 || moveRight !== 0) {
-        // Get camera forward direction (projected onto horizontal plane)
+        // Get camera forward direction
         camera.getWorldDirection(forwardVector);
-        forwardVector.y = 0;
+
+        if (!flyingCameraEnabled) {
+          // Ground mode: project onto horizontal plane
+          forwardVector.y = 0;
+        }
         forwardVector.normalize();
 
-        // Get right vector (perpendicular to forward)
-        rightVector.crossVectors(forwardVector, worldUp).normalize();
+        // Get right vector (perpendicular to forward, always horizontal)
+        const tempForward = forwardVector.clone();
+        tempForward.y = 0;
+        tempForward.normalize();
+        rightVector.crossVectors(tempForward, worldUp).normalize();
 
         // Build movement vector
         moveVector.set(0, 0, 0);
