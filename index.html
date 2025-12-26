@@ -180,6 +180,17 @@
       <span class="hud-label">Terrain Y</span>
       <input id="terrainYInput" class="hud-input" type="number" value="-5" step="1" />
     </div>
+    <div class="hud-row">
+      <span class="hud-label">Hour</span>
+      <input id="hourInput" class="hud-input" type="number" value="12" min="0" max="24" step="0.5" />
+      <span id="hourDisplay" class="hud-unit">12:00</span>
+    </div>
+    <div class="hud-row">
+      <label class="hud-label" style="cursor:pointer;">
+        <input type="checkbox" id="lockLighting" style="margin-right:6px;" checked />
+        Lock Lighting
+      </label>
+    </div>
   </div>
   <canvas id="heightmap-debug" width="128" height="128"></canvas>
   <div id="heightmap-info"></div>
@@ -217,6 +228,12 @@
         offsetX: 0,           // Center terrain on X
         offsetY: -5,          // Push terrain down
         offsetZ: -60          // Push terrain into the distance (negative Z is forward)
+      },
+      sun: {
+        hour: 12,             // Default hour (0-24, 12 = noon)
+        skyRadius: 400,       // Skybox radius
+        sunDistance: 380,     // Sun distance from origin
+        sunSize: 30           // Sun sprite size
       }
     };
 
@@ -246,10 +263,221 @@
     camera.rotation.order = 'YXZ';
 
     // Lighting
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
     directionalLight.position.set(10, 20, 10);
     scene.add(directionalLight);
+
+    // ========== SKYBOX ==========
+    function createSkybox() {
+      const geometry = new THREE.SphereGeometry(CONFIG.sun.skyRadius, 32, 32);
+      // Invert normals so we see inside
+      geometry.scale(-1, 1, 1);
+
+      // Create gradient shader material for sky
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          topColor: { value: new THREE.Color(0x0077ff) },
+          bottomColor: { value: new THREE.Color(0x89cff0) },
+          horizonColor: { value: new THREE.Color(0xffffff) },
+          offset: { value: 20 },
+          exponent: { value: 0.6 }
+        },
+        vertexShader: `
+          varying vec3 vWorldPosition;
+          void main() {
+            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+            vWorldPosition = worldPosition.xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 topColor;
+          uniform vec3 bottomColor;
+          uniform vec3 horizonColor;
+          uniform float offset;
+          uniform float exponent;
+          varying vec3 vWorldPosition;
+          void main() {
+            float h = normalize(vWorldPosition + offset).y;
+            float t = max(pow(max(h, 0.0), exponent), 0.0);
+            vec3 sky = mix(horizonColor, topColor, t);
+            // Add some color below horizon
+            if (h < 0.0) {
+              sky = mix(horizonColor, bottomColor, min(-h * 2.0, 1.0));
+            }
+            gl_FragColor = vec4(sky, 1.0);
+          }
+        `,
+        side: THREE.BackSide
+      });
+
+      return new THREE.Mesh(geometry, material);
+    }
+
+    const skybox = createSkybox();
+    scene.add(skybox);
+
+    // ========== SUN ==========
+    function createSun() {
+      // Create sun texture with glow
+      const size = 128;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      // Radial gradient for sun glow
+      const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+      gradient.addColorStop(0, 'rgba(255, 255, 200, 1)');
+      gradient.addColorStop(0.2, 'rgba(255, 240, 150, 1)');
+      gradient.addColorStop(0.4, 'rgba(255, 200, 100, 0.8)');
+      gradient.addColorStop(0.7, 'rgba(255, 150, 50, 0.3)');
+      gradient.addColorStop(1, 'rgba(255, 100, 0, 0)');
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+
+      const material = new THREE.SpriteMaterial({
+        map: texture,
+        blending: THREE.AdditiveBlending,
+        transparent: true
+      });
+
+      const sun = new THREE.Sprite(material);
+      sun.scale.set(CONFIG.sun.sunSize, CONFIG.sun.sunSize, 1);
+
+      return sun;
+    }
+
+    const sun = createSun();
+    scene.add(sun);
+
+    // Lighting lock state (default: locked with original lighting)
+    let lightingLocked = true;
+
+    // Apply default/locked lighting (original values before sun system)
+    function applyDefaultLighting() {
+      ambientLight.intensity = 0.6;
+      directionalLight.intensity = 0.8;
+      directionalLight.color.setHex(0xffffff);
+      directionalLight.position.set(10, 20, 10);
+
+      // Day sky colors
+      const skyMaterial = skybox.material;
+      skyMaterial.uniforms.topColor.value.setHex(0x0077ff);
+      skyMaterial.uniforms.horizonColor.value.setHex(0x87ceeb);
+      skyMaterial.uniforms.bottomColor.value.setHex(0x89cff0);
+      scene.background = null;
+    }
+
+    // Apply default lighting immediately
+    applyDefaultLighting();
+
+    // Sun position based on hour (0-24)
+    // Sun rises at 6:00, sets at 18:00
+    // At noon (12:00), sun is at highest point
+    function updateSunPosition(hour) {
+      // Normalize hour to 0-24 range
+      hour = ((hour % 24) + 24) % 24;
+
+      // Sun trajectory: rises in east (positive X), arcs overhead, sets in west (negative X)
+      // Hour 6 = sunrise (east), Hour 12 = noon (top), Hour 18 = sunset (west)
+      // Night time (18-6): sun is below horizon
+
+      const sunriseHour = 6;
+      const sunsetHour = 18;
+      const dayLength = sunsetHour - sunriseHour; // 12 hours
+
+      let sunAngle, sunHeight;
+
+      if (hour >= sunriseHour && hour <= sunsetHour) {
+        // Daytime: sun travels from east to west
+        const dayProgress = (hour - sunriseHour) / dayLength; // 0 to 1
+        sunAngle = Math.PI * dayProgress; // 0 to PI (east to west)
+        sunHeight = Math.sin(sunAngle); // 0 -> 1 -> 0
+      } else {
+        // Nighttime: sun is below horizon
+        let nightProgress;
+        if (hour > sunsetHour) {
+          nightProgress = (hour - sunsetHour) / (24 - dayLength);
+        } else {
+          nightProgress = (hour + (24 - sunsetHour)) / (24 - dayLength);
+        }
+        sunAngle = Math.PI + Math.PI * nightProgress; // PI to 2*PI
+        sunHeight = Math.sin(sunAngle); // 0 -> -1 -> 0
+      }
+
+      // Calculate sun position
+      const distance = CONFIG.sun.sunDistance;
+      const x = Math.cos(sunAngle) * distance;
+      const y = sunHeight * distance * 0.7; // Scale height
+      const z = -distance * 0.3; // Slightly in front
+
+      sun.position.set(x, y, z);
+
+      // Update directional light position to match sun (always follows sun)
+      directionalLight.position.set(x, y, z).normalize().multiplyScalar(20);
+
+      // Only update lighting if not locked
+      if (!lightingLocked) {
+        // Adjust lighting based on sun height
+        const dayIntensity = Math.max(0, sunHeight);
+        const ambientIntensity = 0.2 + dayIntensity * 0.4;
+        const directionalIntensity = dayIntensity * 1.2;
+
+        ambientLight.intensity = ambientIntensity;
+        directionalLight.intensity = directionalIntensity;
+
+        // Adjust sun color based on height (redder at horizon)
+        const sunColor = new THREE.Color();
+        if (sunHeight > 0.3) {
+          sunColor.setHex(0xffffcc); // Yellow-white
+        } else if (sunHeight > 0) {
+          sunColor.lerpColors(new THREE.Color(0xff6600), new THREE.Color(0xffffcc), sunHeight / 0.3);
+        } else {
+          sunColor.setHex(0xff4400); // Deep orange/red
+        }
+        directionalLight.color.copy(sunColor);
+
+        // Adjust sky colors based on time
+        const skyMaterial = skybox.material;
+        if (sunHeight > 0.3) {
+          // Day
+          skyMaterial.uniforms.topColor.value.setHex(0x0077ff);
+          skyMaterial.uniforms.horizonColor.value.setHex(0x87ceeb);
+          skyMaterial.uniforms.bottomColor.value.setHex(0x89cff0);
+        } else if (sunHeight > 0) {
+          // Sunrise/sunset
+          const t = sunHeight / 0.3;
+          skyMaterial.uniforms.topColor.value.lerpColors(new THREE.Color(0x1a1a4e), new THREE.Color(0x0077ff), t);
+          skyMaterial.uniforms.horizonColor.value.lerpColors(new THREE.Color(0xff7744), new THREE.Color(0x87ceeb), t);
+          skyMaterial.uniforms.bottomColor.value.lerpColors(new THREE.Color(0xff5522), new THREE.Color(0x89cff0), t);
+        } else {
+          // Night
+          skyMaterial.uniforms.topColor.value.setHex(0x0a0a20);
+          skyMaterial.uniforms.horizonColor.value.setHex(0x1a1a3e);
+          skyMaterial.uniforms.bottomColor.value.setHex(0x0a0a15);
+        }
+
+        // Update scene background for night
+        if (sunHeight < 0) {
+          scene.background = new THREE.Color(0x0a0a15);
+        } else {
+          scene.background = null; // Use skybox
+        }
+      }
+
+      // Sun visibility (always update, even when locked)
+      sun.visible = sunHeight > -0.1;
+    }
+
+    // Initialize sun position
+    updateSunPosition(CONFIG.sun.hour);
 
     // Axis helper at origin
     const axisOrigin = new THREE.Vector3(
@@ -821,6 +1049,9 @@
     const camRotValue = document.getElementById('camRotValue');
     const flyingCamCheckbox = document.getElementById('flyingCam');
     const terrainYInput = document.getElementById('terrainYInput');
+    const hourInput = document.getElementById('hourInput');
+    const hourDisplay = document.getElementById('hourDisplay');
+    const lockLightingCheckbox = document.getElementById('lockLighting');
 
     // Flying camera mode
     let flyingCameraEnabled = false;
@@ -833,6 +1064,32 @@
       const newY = parseFloat(terrainYInput.value) || 0;
       terrainData.mesh.position.y = newY;
       CONFIG.terrain.offsetY = newY;
+    });
+
+    // Hour control for sun position
+    function formatHour(hour) {
+      const h = Math.floor(hour);
+      const m = Math.round((hour - h) * 60);
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    }
+
+    hourInput.addEventListener('input', () => {
+      const hour = parseFloat(hourInput.value) || 12;
+      CONFIG.sun.hour = hour;
+      updateSunPosition(hour);
+      hourDisplay.textContent = formatHour(hour);
+    });
+
+    // Lock lighting checkbox
+    lockLightingCheckbox.addEventListener('change', (e) => {
+      lightingLocked = e.target.checked;
+      if (lightingLocked) {
+        // Apply fixed default lighting
+        applyDefaultLighting();
+      } else {
+        // Refresh to dynamic sun-based lighting
+        updateSunPosition(CONFIG.sun.hour);
+      }
     });
 
     function fireProjectile() {
