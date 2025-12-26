@@ -248,12 +248,12 @@ export function getTerrainColor(normalizedHeight) {
 export const GOLF_TERRAIN_CONFIG = {
   width: 128,
   height: 128,
-  scale: 0.025,
-  octaves: 4,
-  persistence: 0.35,     // Lower for smoother rolling hills
+  scale: 0.03,
+  octaves: 5,
+  persistence: 0.45,     // More variation in hills
   lacunarity: 2.0,
-  heightMultiplier: 12,  // Gentle height variation
+  heightMultiplier: 25,  // More pronounced height differences
   baseHeight: 0,
   seed: 42,
-  ridgeFrequency: 0.4
+  ridgeFrequency: 0.5
 };

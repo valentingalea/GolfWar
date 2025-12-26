@@ -19,16 +19,58 @@
       border: 2px solid rgba(255,255,255,0.3);
       background: #000;
     }
-    #heightmap-info {
+    #terrain-panel {
       position: fixed;
       right: 16px;
       top: 160px;
-      padding: 8px;
-      background: rgba(0,0,0,0.7);
+      padding: 10px;
+      background: rgba(0,0,0,0.8);
       color: #fff;
       font-family: monospace;
       font-size: 11px;
       border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.15);
+      min-width: 180px;
+    }
+    #terrain-panel .panel-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+    }
+    #terrain-panel .param-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+    #terrain-panel .param-label {
+      flex: 1;
+    }
+    #terrain-panel .param-input {
+      width: 55px;
+      padding: 2px 4px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 10px;
+    }
+    #terrain-panel .regen-btn {
+      width: 100%;
+      margin-top: 8px;
+      padding: 6px;
+      background: rgba(80, 120, 200, 0.7);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: monospace;
+      font-weight: bold;
+    }
+    #terrain-panel .regen-btn:hover {
+      background: rgba(100, 140, 220, 0.8);
     }
     #hud {
       position: fixed;
@@ -193,7 +235,38 @@
     </div>
   </div>
   <canvas id="heightmap-debug" width="128" height="128"></canvas>
-  <div id="heightmap-info"></div>
+  <div id="terrain-panel">
+    <div class="panel-title">Terrain Config</div>
+    <div class="param-row">
+      <span class="param-label">Scale</span>
+      <input class="param-input" id="terrainScale" type="number" value="0.03" step="0.005" min="0.01" max="0.1">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Octaves</span>
+      <input class="param-input" id="terrainOctaves" type="number" value="5" step="1" min="1" max="8">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Persistence</span>
+      <input class="param-input" id="terrainPersistence" type="number" value="0.45" step="0.05" min="0.1" max="0.9">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Lacunarity</span>
+      <input class="param-input" id="terrainLacunarity" type="number" value="2.0" step="0.1" min="1.0" max="4.0">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Height</span>
+      <input class="param-input" id="terrainHeightMult" type="number" value="25" step="1" min="5" max="60">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Ridge Freq</span>
+      <input class="param-input" id="terrainRidgeFreq" type="number" value="0.5" step="0.1" min="0.1" max="1.0">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Seed</span>
+      <input class="param-input" id="terrainSeed" type="number" value="42" step="1" min="1" max="9999">
+    </div>
+    <button class="regen-btn" id="regenTerrainBtn">Regenerate</button>
+  </div>
   <script type="module">
     import * as THREE from 'three';
     import {
@@ -696,25 +769,126 @@
       }
 
       ctx.putImageData(imageData, 0, 0);
-
-      // Update info panel
-      const { worldSize, resolution, offsetX, offsetY, offsetZ } = CONFIG.terrain;
-      const infoEl = document.getElementById('heightmap-info');
-      infoEl.innerHTML = `
-        <b>Terrain Debug</b><br>
-        Heightmap: ${width}x${height}<br>
-        Min H: ${minHeight.toFixed(2)}<br>
-        Max H: ${maxHeight.toFixed(2)}<br>
-        World Size: ${worldSize}<br>
-        Resolution: ${resolution}x${resolution}<br>
-        <b>Position:</b><br>
-        X: ${-worldSize/2 + offsetX} to ${worldSize/2 + offsetX}<br>
-        Y: ${offsetY}<br>
-        Z: ${-worldSize/2 + offsetZ} to ${worldSize/2 + offsetZ}
-      `;
     }
 
     renderHeightmapDebug(terrainData.heightmap);
+
+    // ========== TERRAIN REGENERATION ==========
+    // Store current terrain config for regeneration
+    const terrainGenConfig = {
+      scale: 0.03,
+      octaves: 5,
+      persistence: 0.45,
+      lacunarity: 2.0,
+      heightMultiplier: 25,
+      ridgeFrequency: 0.5,
+      seed: 42
+    };
+
+    function regenerateTerrain() {
+      // Read values from inputs
+      terrainGenConfig.scale = parseFloat(document.getElementById('terrainScale').value) || 0.03;
+      terrainGenConfig.octaves = parseInt(document.getElementById('terrainOctaves').value) || 5;
+      terrainGenConfig.persistence = parseFloat(document.getElementById('terrainPersistence').value) || 0.45;
+      terrainGenConfig.lacunarity = parseFloat(document.getElementById('terrainLacunarity').value) || 2.0;
+      terrainGenConfig.heightMultiplier = parseFloat(document.getElementById('terrainHeightMult').value) || 25;
+      terrainGenConfig.ridgeFrequency = parseFloat(document.getElementById('terrainRidgeFreq').value) || 0.5;
+      terrainGenConfig.seed = parseInt(document.getElementById('terrainSeed').value) || 42;
+
+      // Generate new heightmap
+      const newHeightmap = generateHeightmap({
+        width: 128,
+        height: 128,
+        scale: terrainGenConfig.scale,
+        octaves: terrainGenConfig.octaves,
+        persistence: terrainGenConfig.persistence,
+        lacunarity: terrainGenConfig.lacunarity,
+        heightMultiplier: terrainGenConfig.heightMultiplier,
+        ridgeFrequency: terrainGenConfig.ridgeFrequency,
+        seed: terrainGenConfig.seed,
+        baseHeight: 0
+      });
+
+      // Rebuild terrain geometry
+      const { worldSize, resolution, offsetX, offsetY, offsetZ } = CONFIG.terrain;
+      const geometry = new THREE.BufferGeometry();
+      const vertices = [];
+      const colors = [];
+      const indices = [];
+
+      const segmentsX = resolution - 1;
+      const segmentsZ = resolution - 1;
+
+      for (let z = 0; z < resolution; z++) {
+        for (let x = 0; x < resolution; x++) {
+          const u = x / (resolution - 1);
+          const v = z / (resolution - 1);
+          const worldX = (u - 0.5) * worldSize + offsetX;
+          const worldZ = (v - 0.5) * worldSize + offsetZ;
+          const height = newHeightmap.getHeightInterpolated(u, v);
+
+          vertices.push(worldX, height, worldZ);
+
+          const normalizedHeight = (height - newHeightmap.minHeight) /
+            (newHeightmap.maxHeight - newHeightmap.minHeight);
+          const color = getTerrainColor(normalizedHeight);
+
+          colors.push(
+            ((color >> 16) & 0xff) / 255,
+            ((color >> 8) & 0xff) / 255,
+            (color & 0xff) / 255
+          );
+        }
+      }
+
+      for (let z = 0; z < segmentsZ; z++) {
+        for (let x = 0; x < segmentsX; x++) {
+          const a = z * resolution + x;
+          const b = z * resolution + x + 1;
+          const c = (z + 1) * resolution + x;
+          const d = (z + 1) * resolution + x + 1;
+          indices.push(a, c, b);
+          indices.push(b, c, d);
+        }
+      }
+
+      const positionArray = new Float32Array(indices.length * 3);
+      const colorArray = new Float32Array(indices.length * 3);
+
+      for (let i = 0; i < indices.length; i++) {
+        const idx = indices[i];
+        positionArray[i * 3] = vertices[idx * 3];
+        positionArray[i * 3 + 1] = vertices[idx * 3 + 1];
+        positionArray[i * 3 + 2] = vertices[idx * 3 + 2];
+
+        colorArray[i * 3] = colors[idx * 3];
+        colorArray[i * 3 + 1] = colors[idx * 3 + 1];
+        colorArray[i * 3 + 2] = colors[idx * 3 + 2];
+      }
+
+      geometry.setAttribute('position', new THREE.BufferAttribute(positionArray, 3));
+      geometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
+      geometry.computeVertexNormals();
+
+      // Update terrain mesh
+      terrainData.mesh.geometry.dispose();
+      terrainData.mesh.geometry = geometry;
+
+      // Update wireframe child if exists
+      if (terrainData.mesh.children.length > 0) {
+        terrainData.mesh.children[0].geometry.dispose();
+        terrainData.mesh.children[0].geometry = geometry;
+      }
+
+      // Update heightmap reference and debug display
+      terrainData.heightmap = newHeightmap;
+      renderHeightmapDebug(newHeightmap);
+
+      console.log('Terrain regenerated:', terrainGenConfig);
+    }
+
+    // Add regenerate button listener
+    document.getElementById('regenTerrainBtn').addEventListener('click', regenerateTerrain);
 
     // ========== HOWITZER MODEL ==========
     const howitzer = new THREE.Group();
