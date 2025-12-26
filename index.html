@@ -85,6 +85,17 @@
     .fire-btn:active {
       background: rgba(255, 100, 100, 0.9);
     }
+    .hud-divider {
+      height: 1px;
+      background: rgba(255,255,255,0.2);
+      margin: 4px 0;
+    }
+    .hud-readonly {
+      font-size: 11px;
+      color: rgba(255,255,255,0.7);
+      flex: 1;
+      text-align: right;
+    }
   </style>
   <script type="importmap">
   {
@@ -131,6 +142,15 @@
     <div class="hud-row">
       <button id="fireBtn" class="hud-btn fire-btn">FIRE</button>
     </div>
+    <div class="hud-divider"></div>
+    <div class="hud-row">
+      <span class="hud-label">Cam Pos</span>
+      <span id="camPosValue" class="hud-value hud-readonly">0, 0, 0</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Cam Rot</span>
+      <span id="camRotValue" class="hud-value hud-readonly">0°, 0°</span>
+    </div>
   </div>
   <script type="module">
     import * as THREE from 'three';
@@ -140,8 +160,9 @@
         fov: 65,
         near: 0.1,
         far: 500,
-        position: { x: 0, y: 1.65, z: 5 },
-        lookAt: { x: 0, y: 0, z: 0 }
+        position: { x: 1.5, y: 1.6, z: 2.2 },
+        initialYawDeg: 356,
+        initialPitchDeg: 0
       },
       ground: {
         size: 1000,
@@ -629,6 +650,8 @@
     const recoilSpeedInput = document.getElementById('recoilSpeedInput');
     const outerRecoilSpeedInput = document.getElementById('outerRecoilSpeedInput');
     const fireBtn = document.getElementById('fireBtn');
+    const camPosValue = document.getElementById('camPosValue');
+    const camRotValue = document.getElementById('camRotValue');
 
     function fireProjectile() {
       const velocity = parseFloat(velocityInput.value) || 20;
@@ -670,16 +693,8 @@
     fireBtn.addEventListener('click', fireProjectile);
 
     // Camera orientation
-    const lookAtTarget = new THREE.Vector3(
-      CONFIG.camera.lookAt.x,
-      CONFIG.camera.lookAt.y,
-      CONFIG.camera.lookAt.z
-    );
-    const lookDirection = new THREE.Vector3()
-      .subVectors(lookAtTarget, camera.position)
-      .normalize();
-    let yaw = Math.atan2(lookDirection.x, lookDirection.z) + Math.PI;
-    let pitch = Math.asin(THREE.MathUtils.clamp(lookDirection.y, -1, 1));
+    let yaw = THREE.MathUtils.degToRad(CONFIG.camera.initialYawDeg);
+    let pitch = THREE.MathUtils.degToRad(CONFIG.camera.initialPitchDeg);
 
     const maxPitch = THREE.MathUtils.degToRad(CONFIG.controls.maxPitchDeg);
 
@@ -840,6 +855,12 @@
           projectiles.splice(i, 1);
         }
       }
+
+      // Update camera debug display
+      camPosValue.textContent = `${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}`;
+      const yawDeg = THREE.MathUtils.radToDeg(yaw).toFixed(0);
+      const pitchDeg = THREE.MathUtils.radToDeg(pitch).toFixed(0);
+      camRotValue.textContent = `${yawDeg}°, ${pitchDeg}°`;
 
       renderer.render(scene, camera);
     }
