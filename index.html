@@ -12,6 +12,79 @@
       overflow: hidden;
     }
     canvas { display: block; }
+    #hud {
+      position: fixed;
+      left: 16px;
+      top: 16px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      font-family: monospace;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 200px;
+    }
+    .hud-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .hud-label {
+      flex: 1;
+    }
+    .hud-value {
+      min-width: 50px;
+      text-align: center;
+      background: rgba(255,255,255,0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .hud-btn {
+      width: 28px;
+      height: 28px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .hud-btn:hover {
+      background: rgba(255,255,255,0.2);
+    }
+    .hud-btn:active {
+      background: rgba(255,255,255,0.3);
+    }
+    .hud-input {
+      width: 60px;
+      padding: 4px 6px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    .hud-unit {
+      font-size: 11px;
+      color: rgba(255,255,255,0.6);
+    }
+    .fire-btn {
+      width: 100%;
+      background: rgba(200, 60, 60, 0.7);
+      font-weight: bold;
+    }
+    .fire-btn:hover {
+      background: rgba(220, 80, 80, 0.8);
+    }
+    .fire-btn:active {
+      background: rgba(255, 100, 100, 0.9);
+    }
   </style>
   <script type="importmap">
   {
@@ -22,6 +95,33 @@
   </script>
 </head>
 <body>
+  <div id="hud">
+    <div class="hud-row">
+      <span class="hud-label">Rotation</span>
+      <span id="rotationValue" class="hud-value">0°</span>
+      <button id="rotLeft" class="hud-btn">&lt;</button>
+      <button id="rotRight" class="hud-btn">&gt;</button>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Elevation</span>
+      <span id="elevationValue" class="hud-value">40°</span>
+      <button id="elevDown" class="hud-btn">-</button>
+      <button id="elevUp" class="hud-btn">+</button>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Velocity</span>
+      <input id="velocityInput" class="hud-input" type="number" value="20" min="10" max="200" step="5" />
+      <span class="hud-unit">m/s</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Mass</span>
+      <input id="massInput" class="hud-input" type="number" value="10" min="1" max="100" step="1" />
+      <span class="hud-unit">kg</span>
+    </div>
+    <div class="hud-row">
+      <button id="fireBtn" class="hud-btn fire-btn">FIRE</button>
+    </div>
+  </div>
   <script type="module">
     import * as THREE from 'three';
 
@@ -282,18 +382,23 @@
     topPlate.position.set(0, 0.65, 0.1);
     howitzer.add(topPlate);
 
-    // === PIVOT/CRADLE BASE ===
+    // === TURRET GROUP (rotates on base) ===
+    const turretGroup = new THREE.Group();
+    turretGroup.position.set(0, 0.75, 0.1);
+    howitzer.add(turretGroup);
+
+    // Pivot base (part of turret)
     const pivotBaseGeometry = new THREE.CylinderGeometry(0.25, 0.3, 0.2, 24);
     const pivotBase = new THREE.Mesh(pivotBaseGeometry, metalLight);
-    pivotBase.position.set(0, 0.75, 0.1);
-    howitzer.add(pivotBase);
+    pivotBase.position.set(0, 0, 0);
+    turretGroup.add(pivotBase);
 
     // === ELEVATING GROUP (barrel assembly that tilts) ===
     const elevatingGroup = new THREE.Group();
-    elevatingGroup.position.set(0, 0.85, 0.1);
+    elevatingGroup.position.set(0, 0.1, 0);
     // Set elevation to 40 degrees
     elevatingGroup.rotation.x = -THREE.MathUtils.degToRad(40);
-    howitzer.add(elevatingGroup);
+    turretGroup.add(elevatingGroup);
 
     // Cradle (holds the barrel)
     const cradleGeometry = new THREE.BoxGeometry(0.5, 0.25, 0.8);
@@ -409,6 +514,93 @@
     sightTube.position.set(0.25, 0.27, 0.25);
     elevatingGroup.add(sightTube);
 
+    // ========== CANNON CONTROLS ==========
+    // Track angles in degrees (rotation is offset by 180 since howitzer faces backward)
+    let cannonRotationDeg = 0;  // Display value (0 = facing forward)
+    let cannonElevationDeg = 40; // Initial elevation
+
+    const rotationValueEl = document.getElementById('rotationValue');
+    const elevationValueEl = document.getElementById('elevationValue');
+
+    function updateCannonRotation() {
+      // Apply rotation to turret only (upper part)
+      turretGroup.rotation.y = THREE.MathUtils.degToRad(cannonRotationDeg);
+      rotationValueEl.textContent = `${cannonRotationDeg}°`;
+    }
+
+    function updateCannonElevation() {
+      // Clamp elevation between 0 and 80 degrees
+      cannonElevationDeg = THREE.MathUtils.clamp(cannonElevationDeg, 0, 80);
+      elevatingGroup.rotation.x = -THREE.MathUtils.degToRad(cannonElevationDeg);
+      elevationValueEl.textContent = `${cannonElevationDeg}°`;
+    }
+
+    // Initialize displays
+    updateCannonRotation();
+    updateCannonElevation();
+
+    // Button event listeners
+    document.getElementById('rotLeft').addEventListener('click', () => {
+      cannonRotationDeg -= 5;
+      updateCannonRotation();
+    });
+    document.getElementById('rotRight').addEventListener('click', () => {
+      cannonRotationDeg += 5;
+      updateCannonRotation();
+    });
+    document.getElementById('elevUp').addEventListener('click', () => {
+      cannonElevationDeg += 5;
+      updateCannonElevation();
+    });
+    document.getElementById('elevDown').addEventListener('click', () => {
+      cannonElevationDeg -= 5;
+      updateCannonElevation();
+    });
+
+    // ========== PROJECTILE SYSTEM ==========
+    const projectiles = [];
+    const gravity = new THREE.Vector3(0, -9.81, 0);
+    const projectileGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+    const projectileMaterial = new THREE.MeshStandardMaterial({
+      color: 0x333333,
+      roughness: 0.3,
+      metalness: 0.8
+    });
+
+    const velocityInput = document.getElementById('velocityInput');
+    const massInput = document.getElementById('massInput');
+    const fireBtn = document.getElementById('fireBtn');
+
+    function fireProjectile() {
+      const velocity = parseFloat(velocityInput.value) || 50;
+      const mass = parseFloat(massInput.value) || 15;
+
+      // Create projectile mesh
+      const projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
+
+      // Get muzzle world position (end of barrel)
+      const muzzleLocal = new THREE.Vector3(0, 0.05, innerBarrelLength + 0.9);
+      const muzzleWorld = muzzleLocal.clone();
+      elevatingGroup.localToWorld(muzzleWorld);
+
+      projectile.position.copy(muzzleWorld);
+      scene.add(projectile);
+
+      // Calculate firing direction from barrel orientation
+      const direction = new THREE.Vector3(0, 0, 1);
+      direction.applyQuaternion(elevatingGroup.getWorldQuaternion(new THREE.Quaternion()));
+      direction.normalize();
+
+      // Store projectile data
+      projectiles.push({
+        mesh: projectile,
+        velocity: direction.multiplyScalar(velocity),
+        mass: mass
+      });
+    }
+
+    fireBtn.addEventListener('click', fireProjectile);
+
     // Camera orientation
     const lookAtTarget = new THREE.Vector3(
       CONFIG.camera.lookAt.x,
@@ -436,6 +628,7 @@
 
     renderer.domElement.addEventListener('mousedown', (event) => {
       if (event.button !== 0) return;
+      if (event.target.closest('#hud')) return; // Don't drag when clicking HUD
       isDragging = true;
       lastMouseX = event.clientX;
       lastMouseY = event.clientY;
@@ -501,6 +694,23 @@
         if (moveVector.lengthSq() > 0) {
           moveVector.normalize();
           camera.position.addScaledVector(moveVector, CONFIG.controls.moveSpeed * dt);
+        }
+      }
+
+      // Update projectiles (ballistic trajectory)
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        const proj = projectiles[i];
+
+        // Apply gravity: v = v + g * dt
+        proj.velocity.addScaledVector(gravity, dt);
+
+        // Update position: p = p + v * dt
+        proj.mesh.position.addScaledVector(proj.velocity, dt);
+
+        // Remove if hit ground or too far away
+        if (proj.mesh.position.y < 0 || proj.mesh.position.length() > 500) {
+          scene.remove(proj.mesh);
+          projectiles.splice(i, 1);
         }
       }
 
