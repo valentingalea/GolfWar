@@ -242,6 +242,8 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
 
     // Scene setup
@@ -267,6 +269,17 @@
     scene.add(ambientLight);
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
     directionalLight.position.set(10, 20, 10);
+    directionalLight.castShadow = true;
+    // Shadow camera setup for larger area
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.camera.near = 1;
+    directionalLight.shadow.camera.far = 200;
+    directionalLight.shadow.camera.left = -50;
+    directionalLight.shadow.camera.right = 50;
+    directionalLight.shadow.camera.top = 50;
+    directionalLight.shadow.camera.bottom = -50;
+    directionalLight.shadow.bias = -0.001;
     scene.add(directionalLight);
 
     // ========== SKYBOX ==========
@@ -365,7 +378,8 @@
       ambientLight.intensity = 0.6;
       directionalLight.intensity = 0.8;
       directionalLight.color.setHex(0xffffff);
-      directionalLight.position.set(10, 20, 10);
+      // Position for good shadow casting (normalized direction * distance)
+      directionalLight.position.set(30, 50, 30);
 
       // Day sky colors
       const skyMaterial = skybox.material;
@@ -420,8 +434,10 @@
 
       sun.position.set(x, y, z);
 
-      // Update directional light position to match sun (always follows sun)
-      directionalLight.position.set(x, y, z).normalize().multiplyScalar(20);
+      // Update directional light position to match sun direction (always follows sun)
+      // Use a closer position for proper shadow casting
+      const lightDir = new THREE.Vector3(x, y, z).normalize();
+      directionalLight.position.copy(lightDir.multiplyScalar(50));
 
       // Only update lighting if not locked
       if (!lightingLocked) {
@@ -987,6 +1003,14 @@
     const carriageBaseZ = carriageGroup.position.z;
     const carriageBaseRotX = carriageGroup.rotation.x;
 
+    // Enable shadows on howitzer
+    howitzer.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+
     // ========== CANNON CONTROLS ==========
     // Track angles in degrees (rotation is offset by 180 since howitzer faces backward)
     let cannonRotationDeg = 0;  // Display value (0 = facing forward)
@@ -1102,6 +1126,7 @@
 
       // Create projectile mesh
       const projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
+      projectile.castShadow = true;
 
       // Get muzzle world position (end of barrel)
       const muzzleLocal = new THREE.Vector3(0, 0.05, innerBarrelLength + 0.9);
