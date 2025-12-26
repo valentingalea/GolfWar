@@ -269,11 +269,12 @@
   </div>
   <script type="module">
     import * as THREE from 'three';
-    import {
-      generateHeightmap,
-      getTerrainColor,
-      GOLF_TERRAIN_CONFIG
-    } from './terrain-heightmap.js';
+
+    // Import modules
+    import { setupRenderer, createLighting } from './lighting.js';
+    import { createSkybox, createSun, setupHourControl } from './sun.js';
+    import { createTerrain, renderHeightmapDebug, createTerrainRegeneration, setupTerrainYControl } from './terrain.js';
+    import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createProjectileSystem } from './cannon.js';
 
     const CONFIG = {
       camera: {
@@ -296,34 +297,26 @@
         moveSpeed: 5.0
       },
       terrain: {
-        worldSize: 150,       // Terrain size in world units
-        resolution: 48,       // Geometry resolution (vertices per side) - low for low-poly look
-        offsetX: 0,           // Center terrain on X
-        offsetY: -5,          // Push terrain down
-        offsetZ: -60          // Push terrain into the distance (negative Z is forward)
+        worldSize: 150,
+        resolution: 48,
+        offsetX: 0,
+        offsetY: -5,
+        offsetZ: -60
       },
       sun: {
-        hour: 12,             // Default hour (0-24, 12 = noon)
-        skyRadius: 400,       // Skybox radius
-        sunDistance: 380,     // Sun distance from origin
-        sunSize: 30           // Sun sprite size
+        hour: 12,
+        skyRadius: 400,
+        sunDistance: 380,
+        sunSize: 30
       }
     };
 
-    // Renderer setup
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    document.body.appendChild(renderer.domElement);
-
-    // Scene setup
+    // ========== RENDERER & SCENE ==========
+    const renderer = setupRenderer();
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a1a2e);
 
-    // Camera setup
+    // ========== CAMERA ==========
     const camera = new THREE.PerspectiveCamera(
       CONFIG.camera.fov,
       window.innerWidth / window.innerHeight,
@@ -337,245 +330,27 @@
     );
     camera.rotation.order = 'YXZ';
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-    scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    directionalLight.position.set(10, 20, 10);
-    directionalLight.castShadow = true;
-    // Shadow camera setup for larger area
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
-    directionalLight.shadow.camera.near = 1;
-    directionalLight.shadow.camera.far = 200;
-    directionalLight.shadow.camera.left = -50;
-    directionalLight.shadow.camera.right = 50;
-    directionalLight.shadow.camera.top = 50;
-    directionalLight.shadow.camera.bottom = -50;
-    directionalLight.shadow.bias = -0.001;
-    scene.add(directionalLight);
+    // ========== LIGHTING ==========
+    const lighting = createLighting(scene);
 
     // ========== SKYBOX ==========
-    function createSkybox() {
-      const geometry = new THREE.SphereGeometry(CONFIG.sun.skyRadius, 32, 32);
-      // Invert normals so we see inside
-      geometry.scale(-1, 1, 1);
-
-      // Create gradient shader material for sky
-      const material = new THREE.ShaderMaterial({
-        uniforms: {
-          topColor: { value: new THREE.Color(0x0077ff) },
-          bottomColor: { value: new THREE.Color(0x89cff0) },
-          horizonColor: { value: new THREE.Color(0xffffff) },
-          offset: { value: 20 },
-          exponent: { value: 0.6 }
-        },
-        vertexShader: `
-          varying vec3 vWorldPosition;
-          void main() {
-            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-            vWorldPosition = worldPosition.xyz;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        fragmentShader: `
-          uniform vec3 topColor;
-          uniform vec3 bottomColor;
-          uniform vec3 horizonColor;
-          uniform float offset;
-          uniform float exponent;
-          varying vec3 vWorldPosition;
-          void main() {
-            float h = normalize(vWorldPosition + offset).y;
-            float t = max(pow(max(h, 0.0), exponent), 0.0);
-            vec3 sky = mix(horizonColor, topColor, t);
-            // Add some color below horizon
-            if (h < 0.0) {
-              sky = mix(horizonColor, bottomColor, min(-h * 2.0, 1.0));
-            }
-            gl_FragColor = vec4(sky, 1.0);
-          }
-        `,
-        side: THREE.BackSide
-      });
-
-      return new THREE.Mesh(geometry, material);
-    }
-
-    const skybox = createSkybox();
+    const skybox = createSkybox(CONFIG.sun);
     scene.add(skybox);
 
     // ========== SUN ==========
-    function createSun() {
-      // Create sun texture with glow
-      const size = 128;
-      const canvas = document.createElement('canvas');
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext('2d');
-
-      // Radial gradient for sun glow
-      const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
-      gradient.addColorStop(0, 'rgba(255, 255, 200, 1)');
-      gradient.addColorStop(0.2, 'rgba(255, 240, 150, 1)');
-      gradient.addColorStop(0.4, 'rgba(255, 200, 100, 0.8)');
-      gradient.addColorStop(0.7, 'rgba(255, 150, 50, 0.3)');
-      gradient.addColorStop(1, 'rgba(255, 100, 0, 0)');
-
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, size, size);
-
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.colorSpace = THREE.SRGBColorSpace;
-
-      const material = new THREE.SpriteMaterial({
-        map: texture,
-        blending: THREE.AdditiveBlending,
-        transparent: true
-      });
-
-      const sun = new THREE.Sprite(material);
-      sun.scale.set(CONFIG.sun.sunSize, CONFIG.sun.sunSize, 1);
-
-      return sun;
-    }
-
-    const sun = createSun();
+    const sun = createSun(CONFIG.sun);
     scene.add(sun);
 
-    // Lighting lock state (default: locked with original lighting)
-    let lightingLocked = true;
+    // ========== HOUR CONTROL ==========
+    const hourControl = setupHourControl(sun, skybox, scene, lighting, CONFIG.sun);
 
-    // Apply default/locked lighting (original values before sun system)
-    function applyDefaultLighting() {
-      ambientLight.intensity = 0.6;
-      directionalLight.intensity = 0.8;
-      directionalLight.color.setHex(0xffffff);
-      // Position for good shadow casting (normalized direction * distance)
-      directionalLight.position.set(30, 50, 30);
-
-      // Day sky colors
-      const skyMaterial = skybox.material;
-      skyMaterial.uniforms.topColor.value.setHex(0x0077ff);
-      skyMaterial.uniforms.horizonColor.value.setHex(0x87ceeb);
-      skyMaterial.uniforms.bottomColor.value.setHex(0x89cff0);
-      scene.background = null;
-    }
-
-    // Apply default lighting immediately
-    applyDefaultLighting();
-
-    // Sun position based on hour (0-24)
-    // Sun rises at 6:00, sets at 18:00
-    // At noon (12:00), sun is at highest point
-    function updateSunPosition(hour) {
-      // Normalize hour to 0-24 range
-      hour = ((hour % 24) + 24) % 24;
-
-      // Sun trajectory: rises in east (positive X), arcs overhead, sets in west (negative X)
-      // Hour 6 = sunrise (east), Hour 12 = noon (top), Hour 18 = sunset (west)
-      // Night time (18-6): sun is below horizon
-
-      const sunriseHour = 6;
-      const sunsetHour = 18;
-      const dayLength = sunsetHour - sunriseHour; // 12 hours
-
-      let sunAngle, sunHeight;
-
-      if (hour >= sunriseHour && hour <= sunsetHour) {
-        // Daytime: sun travels from east to west
-        const dayProgress = (hour - sunriseHour) / dayLength; // 0 to 1
-        sunAngle = Math.PI * dayProgress; // 0 to PI (east to west)
-        sunHeight = Math.sin(sunAngle); // 0 -> 1 -> 0
-      } else {
-        // Nighttime: sun is below horizon
-        let nightProgress;
-        if (hour > sunsetHour) {
-          nightProgress = (hour - sunsetHour) / (24 - dayLength);
-        } else {
-          nightProgress = (hour + (24 - sunsetHour)) / (24 - dayLength);
-        }
-        sunAngle = Math.PI + Math.PI * nightProgress; // PI to 2*PI
-        sunHeight = Math.sin(sunAngle); // 0 -> -1 -> 0
-      }
-
-      // Calculate sun position
-      const distance = CONFIG.sun.sunDistance;
-      const x = Math.cos(sunAngle) * distance;
-      const y = sunHeight * distance * 0.7; // Scale height
-      const z = -distance * 0.3; // Slightly in front
-
-      sun.position.set(x, y, z);
-
-      // Update directional light position to match sun direction (always follows sun)
-      // Use a closer position for proper shadow casting
-      const lightDir = new THREE.Vector3(x, y, z).normalize();
-      directionalLight.position.copy(lightDir.multiplyScalar(50));
-
-      // Only update lighting if not locked
-      if (!lightingLocked) {
-        // Adjust lighting based on sun height
-        const dayIntensity = Math.max(0, sunHeight);
-        const ambientIntensity = 0.2 + dayIntensity * 0.4;
-        const directionalIntensity = dayIntensity * 1.2;
-
-        ambientLight.intensity = ambientIntensity;
-        directionalLight.intensity = directionalIntensity;
-
-        // Adjust sun color based on height (redder at horizon)
-        const sunColor = new THREE.Color();
-        if (sunHeight > 0.3) {
-          sunColor.setHex(0xffffcc); // Yellow-white
-        } else if (sunHeight > 0) {
-          sunColor.lerpColors(new THREE.Color(0xff6600), new THREE.Color(0xffffcc), sunHeight / 0.3);
-        } else {
-          sunColor.setHex(0xff4400); // Deep orange/red
-        }
-        directionalLight.color.copy(sunColor);
-
-        // Adjust sky colors based on time
-        const skyMaterial = skybox.material;
-        if (sunHeight > 0.3) {
-          // Day
-          skyMaterial.uniforms.topColor.value.setHex(0x0077ff);
-          skyMaterial.uniforms.horizonColor.value.setHex(0x87ceeb);
-          skyMaterial.uniforms.bottomColor.value.setHex(0x89cff0);
-        } else if (sunHeight > 0) {
-          // Sunrise/sunset
-          const t = sunHeight / 0.3;
-          skyMaterial.uniforms.topColor.value.lerpColors(new THREE.Color(0x1a1a4e), new THREE.Color(0x0077ff), t);
-          skyMaterial.uniforms.horizonColor.value.lerpColors(new THREE.Color(0xff7744), new THREE.Color(0x87ceeb), t);
-          skyMaterial.uniforms.bottomColor.value.lerpColors(new THREE.Color(0xff5522), new THREE.Color(0x89cff0), t);
-        } else {
-          // Night
-          skyMaterial.uniforms.topColor.value.setHex(0x0a0a20);
-          skyMaterial.uniforms.horizonColor.value.setHex(0x1a1a3e);
-          skyMaterial.uniforms.bottomColor.value.setHex(0x0a0a15);
-        }
-
-        // Update scene background for night
-        if (sunHeight < 0) {
-          scene.background = new THREE.Color(0x0a0a15);
-        } else {
-          scene.background = null; // Use skybox
-        }
-      }
-
-      // Sun visibility (always update, even when locked)
-      sun.visible = sunHeight > -0.1;
-    }
-
-    // Initialize sun position
-    updateSunPosition(CONFIG.sun.hour);
-
-    // Axis helper at origin
+    // ========== AXIS HELPER ==========
     const axisOrigin = new THREE.Vector3(
       CONFIG.axis.origin.x,
       CONFIG.axis.origin.y,
       CONFIG.axis.origin.z
     );
 
-    // Create custom axis lines
     function createAxisLine(direction, color, length) {
       const material = new THREE.LineBasicMaterial({ color });
       const points = [
@@ -591,7 +366,6 @@
     const zAxis = createAxisLine(new THREE.Vector3(0, 0, 1), 0x4444ff, CONFIG.axis.size);
     scene.add(xAxis, yAxis, zAxis);
 
-    // Create axis labels
     function makeAxisLabel(text, color) {
       const size = 128;
       const canvas = document.createElement('canvas');
@@ -623,717 +397,27 @@
 
     scene.add(labelX, labelY, labelZ);
 
-    // ========== TERRAIN GENERATION ==========
-    function createTerrain() {
-      const { worldSize, resolution, offsetX, offsetY, offsetZ } = CONFIG.terrain;
-
-      // Generate heightmap data
-      const heightmap = generateHeightmap({
-        ...GOLF_TERRAIN_CONFIG,
-        width: 128,
-        height: 128
-      });
-
-      // Create geometry
-      const geometry = new THREE.BufferGeometry();
-      const vertices = [];
-      const colors = [];
-      const indices = [];
-
-      const segmentsX = resolution - 1;
-      const segmentsZ = resolution - 1;
-      const segmentWidth = worldSize / segmentsX;
-      const segmentDepth = worldSize / segmentsZ;
-
-      // Generate vertices with heights from heightmap
-      for (let z = 0; z < resolution; z++) {
-        for (let x = 0; x < resolution; x++) {
-          // Normalized coordinates (0-1)
-          const u = x / (resolution - 1);
-          const v = z / (resolution - 1);
-
-          // World position
-          const worldX = (u - 0.5) * worldSize + offsetX;
-          const worldZ = (v - 0.5) * worldSize + offsetZ;
-
-          // Get height from heightmap
-          const height = heightmap.getHeightInterpolated(u, v);
-
-          vertices.push(worldX, height, worldZ);
-
-          // Get color based on normalized height
-          const normalizedHeight = (height - heightmap.minHeight) /
-            (heightmap.maxHeight - heightmap.minHeight);
-          const color = getTerrainColor(normalizedHeight);
-
-          // Convert hex color to RGB (0-1)
-          colors.push(
-            ((color >> 16) & 0xff) / 255,
-            ((color >> 8) & 0xff) / 255,
-            (color & 0xff) / 255
-          );
-        }
-      }
-
-      // Generate indices for triangles (low-poly flat shading)
-      for (let z = 0; z < segmentsZ; z++) {
-        for (let x = 0; x < segmentsX; x++) {
-          const a = z * resolution + x;
-          const b = z * resolution + x + 1;
-          const c = (z + 1) * resolution + x;
-          const d = (z + 1) * resolution + x + 1;
-
-          // Two triangles per quad
-          indices.push(a, c, b);
-          indices.push(b, c, d);
-        }
-      }
-
-      // Convert to non-indexed geometry for flat shading
-      const positionArray = new Float32Array(indices.length * 3);
-      const colorArray = new Float32Array(indices.length * 3);
-
-      for (let i = 0; i < indices.length; i++) {
-        const idx = indices[i];
-        positionArray[i * 3] = vertices[idx * 3];
-        positionArray[i * 3 + 1] = vertices[idx * 3 + 1];
-        positionArray[i * 3 + 2] = vertices[idx * 3 + 2];
-
-        colorArray[i * 3] = colors[idx * 3];
-        colorArray[i * 3 + 1] = colors[idx * 3 + 1];
-        colorArray[i * 3 + 2] = colors[idx * 3 + 2];
-      }
-
-      geometry.setAttribute('position', new THREE.BufferAttribute(positionArray, 3));
-      geometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
-      geometry.computeVertexNormals();
-
-      // Create material with vertex colors and flat shading for low-poly look
-      const material = new THREE.MeshStandardMaterial({
-        vertexColors: true,
-        flatShading: true,
-        roughness: 0.8,
-        metalness: 0.1,
-        side: THREE.DoubleSide  // Render both sides for debugging
-      });
-
-      const terrain = new THREE.Mesh(geometry, material);
-      terrain.position.y = offsetY;  // Apply vertical offset
-      terrain.receiveShadow = true;
-
-      // Debug: log terrain bounds
-      geometry.computeBoundingBox();
-      console.log('Terrain bounds:', geometry.boundingBox);
-      console.log('Heightmap range:', heightmap.minHeight, 'to', heightmap.maxHeight);
-      console.log('Vertex count:', positionArray.length / 3);
-
-      // Add wireframe for debugging
-      const wireframeMaterial = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.1
-      });
-      const wireframe = new THREE.Mesh(geometry, wireframeMaterial);
-      terrain.add(wireframe);
-
-      return { mesh: terrain, heightmap };
-    }
-
-    const terrainData = createTerrain();
+    // ========== TERRAIN ==========
+    const terrainData = createTerrain(CONFIG.terrain);
     scene.add(terrainData.mesh);
-
-    // ========== HEIGHTMAP DEBUG OVERLAY ==========
-    function renderHeightmapDebug(heightmap) {
-      const canvas = document.getElementById('heightmap-debug');
-      const ctx = canvas.getContext('2d');
-      const { width, height, data, minHeight, maxHeight } = heightmap;
-
-      canvas.width = width;
-      canvas.height = height;
-
-      const imageData = ctx.createImageData(width, height);
-
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const h = data[y * width + x];
-          const normalized = (h - minHeight) / (maxHeight - minHeight);
-          const color = getTerrainColor(normalized);
-
-          const idx = (y * width + x) * 4;
-          imageData.data[idx] = (color >> 16) & 0xff;     // R
-          imageData.data[idx + 1] = (color >> 8) & 0xff;  // G
-          imageData.data[idx + 2] = color & 0xff;         // B
-          imageData.data[idx + 3] = 255;                  // A
-        }
-      }
-
-      ctx.putImageData(imageData, 0, 0);
-    }
-
     renderHeightmapDebug(terrainData.heightmap);
 
-    // ========== TERRAIN REGENERATION ==========
-    // Store current terrain config for regeneration
-    const terrainGenConfig = {
-      scale: 0.03,
-      octaves: 5,
-      persistence: 0.45,
-      lacunarity: 2.0,
-      heightMultiplier: 25,
-      ridgeFrequency: 0.5,
-      seed: 42
-    };
-
-    function regenerateTerrain() {
-      // Read values from inputs
-      terrainGenConfig.scale = parseFloat(document.getElementById('terrainScale').value) || 0.03;
-      terrainGenConfig.octaves = parseInt(document.getElementById('terrainOctaves').value) || 5;
-      terrainGenConfig.persistence = parseFloat(document.getElementById('terrainPersistence').value) || 0.45;
-      terrainGenConfig.lacunarity = parseFloat(document.getElementById('terrainLacunarity').value) || 2.0;
-      terrainGenConfig.heightMultiplier = parseFloat(document.getElementById('terrainHeightMult').value) || 25;
-      terrainGenConfig.ridgeFrequency = parseFloat(document.getElementById('terrainRidgeFreq').value) || 0.5;
-      terrainGenConfig.seed = parseInt(document.getElementById('terrainSeed').value) || 42;
-
-      // Generate new heightmap
-      const newHeightmap = generateHeightmap({
-        width: 128,
-        height: 128,
-        scale: terrainGenConfig.scale,
-        octaves: terrainGenConfig.octaves,
-        persistence: terrainGenConfig.persistence,
-        lacunarity: terrainGenConfig.lacunarity,
-        heightMultiplier: terrainGenConfig.heightMultiplier,
-        ridgeFrequency: terrainGenConfig.ridgeFrequency,
-        seed: terrainGenConfig.seed,
-        baseHeight: 0
-      });
-
-      // Rebuild terrain geometry
-      const { worldSize, resolution, offsetX, offsetY, offsetZ } = CONFIG.terrain;
-      const geometry = new THREE.BufferGeometry();
-      const vertices = [];
-      const colors = [];
-      const indices = [];
-
-      const segmentsX = resolution - 1;
-      const segmentsZ = resolution - 1;
-
-      for (let z = 0; z < resolution; z++) {
-        for (let x = 0; x < resolution; x++) {
-          const u = x / (resolution - 1);
-          const v = z / (resolution - 1);
-          const worldX = (u - 0.5) * worldSize + offsetX;
-          const worldZ = (v - 0.5) * worldSize + offsetZ;
-          const height = newHeightmap.getHeightInterpolated(u, v);
-
-          vertices.push(worldX, height, worldZ);
-
-          const normalizedHeight = (height - newHeightmap.minHeight) /
-            (newHeightmap.maxHeight - newHeightmap.minHeight);
-          const color = getTerrainColor(normalizedHeight);
-
-          colors.push(
-            ((color >> 16) & 0xff) / 255,
-            ((color >> 8) & 0xff) / 255,
-            (color & 0xff) / 255
-          );
-        }
-      }
-
-      for (let z = 0; z < segmentsZ; z++) {
-        for (let x = 0; x < segmentsX; x++) {
-          const a = z * resolution + x;
-          const b = z * resolution + x + 1;
-          const c = (z + 1) * resolution + x;
-          const d = (z + 1) * resolution + x + 1;
-          indices.push(a, c, b);
-          indices.push(b, c, d);
-        }
-      }
-
-      const positionArray = new Float32Array(indices.length * 3);
-      const colorArray = new Float32Array(indices.length * 3);
-
-      for (let i = 0; i < indices.length; i++) {
-        const idx = indices[i];
-        positionArray[i * 3] = vertices[idx * 3];
-        positionArray[i * 3 + 1] = vertices[idx * 3 + 1];
-        positionArray[i * 3 + 2] = vertices[idx * 3 + 2];
-
-        colorArray[i * 3] = colors[idx * 3];
-        colorArray[i * 3 + 1] = colors[idx * 3 + 1];
-        colorArray[i * 3 + 2] = colors[idx * 3 + 2];
-      }
-
-      geometry.setAttribute('position', new THREE.BufferAttribute(positionArray, 3));
-      geometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
-      geometry.computeVertexNormals();
-
-      // Update terrain mesh
-      terrainData.mesh.geometry.dispose();
-      terrainData.mesh.geometry = geometry;
-
-      // Update wireframe child if exists
-      if (terrainData.mesh.children.length > 0) {
-        terrainData.mesh.children[0].geometry.dispose();
-        terrainData.mesh.children[0].geometry = geometry;
-      }
-
-      // Update heightmap reference and debug display
-      terrainData.heightmap = newHeightmap;
-      renderHeightmapDebug(newHeightmap);
-
-      console.log('Terrain regenerated:', terrainGenConfig);
-    }
-
-    // Add regenerate button listener
-    document.getElementById('regenTerrainBtn').addEventListener('click', regenerateTerrain);
-
-    // ========== HOWITZER MODEL ==========
-    const howitzer = new THREE.Group();
-    howitzer.position.set(3, 0, 0);
-    howitzer.rotation.y = Math.PI; // Rotate 180 to face camera forward direction
-    howitzer.scale.setScalar(1.2); // Scale up 20% for military presence
-    scene.add(howitzer);
-
-    // Carriage group - moves during recoil (wheels, body, turret)
-    const carriageGroup = new THREE.Group();
-    howitzer.add(carriageGroup);
-
-    // Materials
-    const metalDark = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.6, metalness: 0.4 });
-    const metalMid = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.5, metalness: 0.5 });
-    const metalLight = new THREE.MeshStandardMaterial({ color: 0x6a6a6a, roughness: 0.4, metalness: 0.6 });
-    const rubber = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9, metalness: 0.0 });
-
-    // === WHEELS ===
-    const wheelRadius = 0.5;
-    const wheelWidth = 0.28; // Wider, chunkier wheels
-    const wheelGeometry = new THREE.CylinderGeometry(wheelRadius, wheelRadius, wheelWidth, 32);
-
-    // Wheel with hub detail
-    function createWheel() {
-      const wheelGroup = new THREE.Group();
-
-      // Tire
-      const tire = new THREE.Mesh(wheelGeometry, rubber);
-      tire.rotation.z = Math.PI / 2;
-      wheelGroup.add(tire);
-
-      // Hub
-      const hubGeometry = new THREE.CylinderGeometry(0.15, 0.15, wheelWidth + 0.02, 16);
-      const hub = new THREE.Mesh(hubGeometry, metalMid);
-      hub.rotation.z = Math.PI / 2;
-      wheelGroup.add(hub);
-
-      // Spokes
-      const spokeGeometry = new THREE.BoxGeometry(0.04, wheelRadius * 1.6, 0.03);
-      for (let i = 0; i < 6; i++) {
-        const spoke = new THREE.Mesh(spokeGeometry, metalMid);
-        spoke.rotation.x = (i / 6) * Math.PI;
-        wheelGroup.add(spoke);
-      }
-
-      return wheelGroup;
-    }
-
-    const leftWheel = createWheel();
-    leftWheel.position.set(-0.9, wheelRadius, 0.3);
-    carriageGroup.add(leftWheel);
-
-    const rightWheel = createWheel();
-    rightWheel.position.set(0.9, wheelRadius, 0.3);
-    carriageGroup.add(rightWheel);
-
-    // Axle
-    const axleGeometry = new THREE.CylinderGeometry(0.06, 0.06, 2.0, 16);
-    const axle = new THREE.Mesh(axleGeometry, metalDark);
-    axle.rotation.z = Math.PI / 2;
-    axle.position.set(0, wheelRadius, 0.3);
-    carriageGroup.add(axle);
-
-    // === TRAILS (legs with spades) ===
-    function createTrail(side) {
-      const trailGroup = new THREE.Group();
-
-      // Main trail beam
-      const beamGeometry = new THREE.BoxGeometry(0.12, 0.15, 2.5);
-      const beam = new THREE.Mesh(beamGeometry, metalMid);
-      beam.position.set(0, 0.08, -1.25);
-      trailGroup.add(beam);
-
-      // Spade (anti-recoil plate that digs into ground)
-      const spadeGeometry = new THREE.BoxGeometry(0.3, 0.4, 0.05);
-      const spade = new THREE.Mesh(spadeGeometry, metalDark);
-      spade.position.set(0, 0.1, -2.5);
-      spade.rotation.x = -0.3; // Angled to dig in
-      trailGroup.add(spade);
-
-      // Spade spike
-      const spikeGeometry = new THREE.ConeGeometry(0.06, 0.2, 8);
-      const spike = new THREE.Mesh(spikeGeometry, metalDark);
-      spike.position.set(0, -0.05, -2.55);
-      spike.rotation.x = Math.PI / 2;
-      trailGroup.add(spike);
-
-      trailGroup.position.x = side * 0.5;
-      return trailGroup;
-    }
-
-    howitzer.add(createTrail(-1)); // Left trail
-    howitzer.add(createTrail(1));  // Right trail
-
-    // Trail cross-brace
-    const braceGeometry = new THREE.BoxGeometry(1.1, 0.08, 0.08);
-    const brace = new THREE.Mesh(braceGeometry, metalMid);
-    brace.position.set(0, 0.12, -1.8);
-    howitzer.add(brace);
-
-    // === CARRIAGE (main body) ===
-    const carriageGeometry = new THREE.BoxGeometry(0.9, 0.35, 0.8);
-    const carriage = new THREE.Mesh(carriageGeometry, metalMid);
-    carriage.position.set(0, 0.45, 0.1);
-    carriageGroup.add(carriage);
-
-    // Carriage top plate
-    const topPlateGeometry = new THREE.BoxGeometry(0.7, 0.08, 0.6);
-    const topPlate = new THREE.Mesh(topPlateGeometry, metalLight);
-    topPlate.position.set(0, 0.65, 0.1);
-    carriageGroup.add(topPlate);
-
-    // === TURRET GROUP (rotates on base) ===
-    const turretGroup = new THREE.Group();
-    turretGroup.position.set(0, 0.75, 0.1);
-    carriageGroup.add(turretGroup);
-
-    // Pivot base (part of turret)
-    const pivotBaseGeometry = new THREE.CylinderGeometry(0.25, 0.3, 0.2, 24);
-    const pivotBase = new THREE.Mesh(pivotBaseGeometry, metalLight);
-    pivotBase.position.set(0, 0, 0);
-    turretGroup.add(pivotBase);
-
-    // === ELEVATING GROUP (barrel assembly that tilts) ===
-    const elevatingGroup = new THREE.Group();
-    elevatingGroup.position.set(0, 0.1, 0);
-    // Set elevation to 40 degrees
-    elevatingGroup.rotation.x = -THREE.MathUtils.degToRad(40);
-    turretGroup.add(elevatingGroup);
-
-    // Cradle (holds the barrel)
-    const cradleGeometry = new THREE.BoxGeometry(0.5, 0.25, 0.8);
-    const cradle = new THREE.Mesh(cradleGeometry, metalMid);
-    cradle.position.set(0, 0, 0.2);
-    elevatingGroup.add(cradle);
-
-    // === BARREL ASSEMBLY (piston mechanism) ===
-    // Outer cylinder (recoil housing/recuperator)
-    const outerBarrelRadius = 0.14;
-    const outerBarrelLength = 1.8;
-    const outerBarrelGeometry = new THREE.CylinderGeometry(
-      outerBarrelRadius, outerBarrelRadius * 1.1, outerBarrelLength, 32
-    );
-    const outerBarrel = new THREE.Mesh(outerBarrelGeometry, metalMid);
-    outerBarrel.rotation.x = Math.PI / 2;
-    outerBarrel.position.set(0, 0.05, outerBarrelLength / 2 + 0.3);
-    elevatingGroup.add(outerBarrel);
-    const outerBarrelBaseZ = outerBarrel.position.z;
-
-    // Inner cylinder (actual barrel - slides back on recoil)
-    const innerBarrelRadius = 0.09;
-    const innerBarrelLength = 2.2;
-    const innerBarrelGeometry = new THREE.CylinderGeometry(
-      innerBarrelRadius, innerBarrelRadius, innerBarrelLength, 32
-    );
-    const innerBarrel = new THREE.Mesh(innerBarrelGeometry, metalLight);
-    innerBarrel.rotation.x = Math.PI / 2;
-    innerBarrel.position.set(0, 0.05, innerBarrelLength / 2 + 0.6);
-    elevatingGroup.add(innerBarrel);
-
-    // Store base position for recoil animation
-    const innerBarrelBaseZ = innerBarrel.position.z;
-
-    // Muzzle brake (at tip of barrel) - moves with inner barrel
-    const muzzleBrakeGeometry = new THREE.CylinderGeometry(0.12, 0.11, 0.25, 32);
-    const muzzleBrake = new THREE.Mesh(muzzleBrakeGeometry, metalDark);
-    muzzleBrake.rotation.x = Math.PI / 2;
-    muzzleBrake.position.set(0, 0.05, innerBarrelLength + 0.75);
-    elevatingGroup.add(muzzleBrake);
-    const muzzleBrakeBaseZ = muzzleBrake.position.z;
-
-    // Breech (back of barrel)
-    const breechGeometry = new THREE.CylinderGeometry(0.16, 0.18, 0.35, 32);
-    const breech = new THREE.Mesh(breechGeometry, metalDark);
-    breech.rotation.x = Math.PI / 2;
-    breech.position.set(0, 0.05, 0);
-    elevatingGroup.add(breech);
-
-    // Breech block
-    const breechBlockGeometry = new THREE.BoxGeometry(0.22, 0.22, 0.12);
-    const breechBlock = new THREE.Mesh(breechBlockGeometry, metalDark);
-    breechBlock.position.set(0, 0.05, -0.15);
-    elevatingGroup.add(breechBlock);
-
-    // === RECOIL CYLINDERS (hydraulic dampeners) ===
-    const recoilCylinderGeometry = new THREE.CylinderGeometry(0.04, 0.04, 1.2, 16);
-
-    const leftRecoilCyl = new THREE.Mesh(recoilCylinderGeometry, metalDark);
-    leftRecoilCyl.rotation.x = Math.PI / 2;
-    leftRecoilCyl.position.set(-0.18, 0.12, 0.8);
-    elevatingGroup.add(leftRecoilCyl);
-
-    const rightRecoilCyl = new THREE.Mesh(recoilCylinderGeometry, metalDark);
-    rightRecoilCyl.rotation.x = Math.PI / 2;
-    rightRecoilCyl.position.set(0.18, 0.12, 0.8);
-    elevatingGroup.add(rightRecoilCyl);
-
-    // === EQUILIBRATORS (help balance barrel weight) ===
-    const equilibratorGeometry = new THREE.CylinderGeometry(0.05, 0.06, 0.7, 16);
-
-    const leftEquilibrator = new THREE.Mesh(equilibratorGeometry, metalMid);
-    leftEquilibrator.position.set(-0.35, 0.3, -0.1);
-    leftEquilibrator.rotation.z = 0.3;
-    leftEquilibrator.rotation.x = -0.2;
-    elevatingGroup.add(leftEquilibrator);
-
-    const rightEquilibrator = new THREE.Mesh(equilibratorGeometry, metalMid);
-    rightEquilibrator.position.set(0.35, 0.3, -0.1);
-    rightEquilibrator.rotation.z = -0.3;
-    rightEquilibrator.rotation.x = -0.2;
-    elevatingGroup.add(rightEquilibrator);
-
-    // === SHIELD (protective plate) ===
-    const shieldGeometry = new THREE.BoxGeometry(1.4, 0.9, 0.04);
-    const shield = new THREE.Mesh(shieldGeometry, metalMid);
-    shield.position.set(0, 0.35, 0.5);
-    shield.rotation.x = -0.15;
-    elevatingGroup.add(shield);
-
-    // Shield cutout for barrel (just visual detail)
-    const shieldNotchGeometry = new THREE.CylinderGeometry(0.18, 0.18, 0.06, 16, 1, false, 0, Math.PI);
-    const shieldNotch = new THREE.Mesh(shieldNotchGeometry, metalMid);
-    shieldNotch.rotation.x = Math.PI / 2;
-    shieldNotch.rotation.z = Math.PI;
-    shieldNotch.position.set(0, -0.05, 0.52);
-    elevatingGroup.add(shieldNotch);
-
-    // === SIGHT (aiming device) ===
-    const sightBaseGeometry = new THREE.BoxGeometry(0.08, 0.12, 0.08);
-    const sightBase = new THREE.Mesh(sightBaseGeometry, metalDark);
-    sightBase.position.set(0.25, 0.15, 0.25);
-    elevatingGroup.add(sightBase);
-
-    const sightTubeGeometry = new THREE.CylinderGeometry(0.025, 0.025, 0.15, 12);
-    const sightTube = new THREE.Mesh(sightTubeGeometry, metalDark);
-    sightTube.position.set(0.25, 0.27, 0.25);
-    elevatingGroup.add(sightTube);
-
-    // === MUZZLE FLASH ===
-    const muzzleFlashTexture = (() => {
-      const size = 128;
-      const canvas = document.createElement('canvas');
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext('2d');
-      const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
-      gradient.addColorStop(0, 'rgba(255, 255, 200, 1)');
-      gradient.addColorStop(0.2, 'rgba(255, 200, 100, 0.9)');
-      gradient.addColorStop(0.5, 'rgba(255, 150, 50, 0.5)');
-      gradient.addColorStop(1, 'rgba(255, 100, 0, 0)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, size, size);
-      const tex = new THREE.CanvasTexture(canvas);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      return tex;
-    })();
-
-    const muzzleFlash = new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map: muzzleFlashTexture,
-        blending: THREE.AdditiveBlending,
-        transparent: true,
-        opacity: 0
-      })
-    );
-    muzzleFlash.scale.set(1.2, 1.2, 1);
-    muzzleFlash.position.set(0, 0.05, innerBarrelLength + 1.0);
-    elevatingGroup.add(muzzleFlash);
-
-    // === FIRING ANIMATION STATE ===
-    const firingAnim = {
-      active: false,
-      time: 0,
-      duration: 1.2,
-      // Barrel recoil
-      barrelRecoilDist: 1.0,
-      barrelRecoilSpeed: 2,
-      outerRecoilSpeed: 4,
-      // Cannon rock
-      cannonRecoilDist: 0.15,
-      cannonRockAngle: 0.08
-    };
-
-    // Store base positions for carriage (not howitzer - spades stay fixed)
-    const carriageBaseZ = carriageGroup.position.z;
-    const carriageBaseRotX = carriageGroup.rotation.x;
-
-    // Enable shadows on howitzer
-    howitzer.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-
-    // ========== CANNON CONTROLS ==========
-    // Track angles in degrees (rotation is offset by 180 since howitzer faces backward)
-    let cannonRotationDeg = 0;  // Display value (0 = facing forward)
-    let cannonElevationDeg = 40; // Initial elevation
-
-    const rotationValueEl = document.getElementById('rotationValue');
-    const elevationValueEl = document.getElementById('elevationValue');
-
-    function updateCannonRotation() {
-      // Apply rotation to turret only (upper part)
-      turretGroup.rotation.y = THREE.MathUtils.degToRad(cannonRotationDeg);
-      rotationValueEl.textContent = `${cannonRotationDeg}°`;
-    }
-
-    function updateCannonElevation() {
-      // Clamp elevation between 0 and 80 degrees
-      cannonElevationDeg = THREE.MathUtils.clamp(cannonElevationDeg, 0, 80);
-      elevatingGroup.rotation.x = -THREE.MathUtils.degToRad(cannonElevationDeg);
-      elevationValueEl.textContent = `${cannonElevationDeg}°`;
-    }
-
-    // Initialize displays
-    updateCannonRotation();
-    updateCannonElevation();
-
-    // Button event listeners
-    document.getElementById('rotLeft').addEventListener('click', () => {
-      cannonRotationDeg -= 5;
-      updateCannonRotation();
-    });
-    document.getElementById('rotRight').addEventListener('click', () => {
-      cannonRotationDeg += 5;
-      updateCannonRotation();
-    });
-    document.getElementById('elevUp').addEventListener('click', () => {
-      cannonElevationDeg += 5;
-      updateCannonElevation();
-    });
-    document.getElementById('elevDown').addEventListener('click', () => {
-      cannonElevationDeg -= 5;
-      updateCannonElevation();
-    });
-
-    // ========== PROJECTILE SYSTEM ==========
-    const projectiles = [];
-    const gravity = new THREE.Vector3(0, -9.81, 0);
-    const projectileGeometry = new THREE.SphereGeometry(0.15, 16, 16);
-    const projectileMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 0.2,
-      metalness: 0.1
-    });
-
-    const velocityInput = document.getElementById('velocityInput');
-    const massInput = document.getElementById('massInput');
-    const recoilSpeedInput = document.getElementById('recoilSpeedInput');
-    const outerRecoilSpeedInput = document.getElementById('outerRecoilSpeedInput');
-    const fireBtn = document.getElementById('fireBtn');
-    const camPosValue = document.getElementById('camPosValue');
-    const camRotValue = document.getElementById('camRotValue');
-    const flyingCamCheckbox = document.getElementById('flyingCam');
-    const terrainYInput = document.getElementById('terrainYInput');
-    const hourInput = document.getElementById('hourInput');
-    const hourDisplay = document.getElementById('hourDisplay');
-    const lockLightingCheckbox = document.getElementById('lockLighting');
-
-    // Flying camera mode
-    let flyingCameraEnabled = false;
-    flyingCamCheckbox.addEventListener('change', (e) => {
-      flyingCameraEnabled = e.target.checked;
-    });
-
-    // Terrain Y control
-    terrainYInput.addEventListener('input', () => {
-      const newY = parseFloat(terrainYInput.value) || 0;
-      terrainData.mesh.position.y = newY;
-      CONFIG.terrain.offsetY = newY;
-    });
-
-    // Hour control for sun position
-    function formatHour(hour) {
-      const h = Math.floor(hour);
-      const m = Math.round((hour - h) * 60);
-      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-    }
-
-    hourInput.addEventListener('input', () => {
-      const hour = parseFloat(hourInput.value) || 12;
-      CONFIG.sun.hour = hour;
-      updateSunPosition(hour);
-      hourDisplay.textContent = formatHour(hour);
-    });
-
-    // Lock lighting checkbox
-    lockLightingCheckbox.addEventListener('change', (e) => {
-      lightingLocked = e.target.checked;
-      if (lightingLocked) {
-        // Apply fixed default lighting
-        applyDefaultLighting();
-      } else {
-        // Refresh to dynamic sun-based lighting
-        updateSunPosition(CONFIG.sun.hour);
-      }
-    });
-
-    function fireProjectile() {
-      const velocity = parseFloat(velocityInput.value) || 20;
-      const mass = parseFloat(massInput.value) || 10;
-      const recoilSpeed = parseFloat(recoilSpeedInput.value) || 2;
-      const outerRecoilSpeed = parseFloat(outerRecoilSpeedInput.value) || 4;
-      firingAnim.barrelRecoilSpeed = recoilSpeed;
-      firingAnim.outerRecoilSpeed = outerRecoilSpeed;
-
-      // Create projectile mesh
-      const projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
-      projectile.castShadow = true;
-
-      // Get muzzle world position (end of barrel)
-      const muzzleLocal = new THREE.Vector3(0, 0.05, innerBarrelLength + 0.9);
-      const muzzleWorld = muzzleLocal.clone();
-      elevatingGroup.localToWorld(muzzleWorld);
-
-      projectile.position.copy(muzzleWorld);
-      scene.add(projectile);
-
-      // Calculate firing direction from barrel orientation
-      const direction = new THREE.Vector3(0, 0, 1);
-      direction.applyQuaternion(elevatingGroup.getWorldQuaternion(new THREE.Quaternion()));
-      direction.normalize();
-
-      // Store projectile data
-      projectiles.push({
-        mesh: projectile,
-        velocity: direction.multiplyScalar(velocity),
-        mass: mass
-      });
-
-      // Trigger firing animation
-      firingAnim.active = true;
-      firingAnim.time = 0;
-      muzzleFlash.material.opacity = 1;
-    }
-
-    fireBtn.addEventListener('click', fireProjectile);
-
-    // Camera orientation
+    // Setup terrain controls
+    createTerrainRegeneration(terrainData, CONFIG.terrain);
+    setupTerrainYControl(terrainData, CONFIG.terrain);
+
+    // ========== HOWITZER ==========
+    const howitzerData = createHowitzer(scene);
+    const firingAnim = createFiringAnimation();
+    const cannonControls = createCannonControls(howitzerData);
+    const projectileSystem = createProjectileSystem(scene, howitzerData, firingAnim);
+
+    // Connect fire button
+    document.getElementById('fireBtn').addEventListener('click', projectileSystem.fire);
+
+    // ========== CAMERA CONTROLS ==========
     let yaw = THREE.MathUtils.degToRad(CONFIG.camera.initialYawDeg);
     let pitch = THREE.MathUtils.degToRad(CONFIG.camera.initialPitchDeg);
-
     const maxPitch = THREE.MathUtils.degToRad(CONFIG.controls.maxPitchDeg);
 
     function applyCameraOrientation() {
@@ -1342,6 +426,13 @@
     }
     applyCameraOrientation();
 
+    // Flying camera mode
+    let flyingCameraEnabled = false;
+    const flyingCamCheckbox = document.getElementById('flyingCam');
+    flyingCamCheckbox.addEventListener('change', (e) => {
+      flyingCameraEnabled = e.target.checked;
+    });
+
     // Mouse controls
     let isDragging = false;
     let lastMouseX = 0;
@@ -1349,7 +440,7 @@
 
     renderer.domElement.addEventListener('mousedown', (event) => {
       if (event.button !== 0) return;
-      if (event.target.closest('#hud')) return; // Don't drag when clicking HUD
+      if (event.target.closest('#hud')) return;
       isDragging = true;
       lastMouseX = event.clientX;
       lastMouseY = event.clientY;
@@ -1387,34 +478,34 @@
     const rightVector = new THREE.Vector3();
     const worldUp = new THREE.Vector3(0, 1, 0);
 
-    // Animation loop
+    // HUD elements
+    const camPosValue = document.getElementById('camPosValue');
+    const camRotValue = document.getElementById('camRotValue');
+
+    // ========== ANIMATION LOOP ==========
     const clock = new THREE.Clock();
 
     function animate() {
       requestAnimationFrame(animate);
       const dt = clock.getDelta();
 
-      // Calculate movement
+      // Camera movement
       const moveForward = (pressedKeys.has('KeyW') ? 1 : 0) - (pressedKeys.has('KeyS') ? 1 : 0);
       const moveRight = (pressedKeys.has('KeyD') ? 1 : 0) - (pressedKeys.has('KeyA') ? 1 : 0);
 
       if (moveForward !== 0 || moveRight !== 0) {
-        // Get camera forward direction
         camera.getWorldDirection(forwardVector);
 
         if (!flyingCameraEnabled) {
-          // Ground mode: project onto horizontal plane
           forwardVector.y = 0;
         }
         forwardVector.normalize();
 
-        // Get right vector (perpendicular to forward, always horizontal)
         const tempForward = forwardVector.clone();
         tempForward.y = 0;
         tempForward.normalize();
         rightVector.crossVectors(tempForward, worldUp).normalize();
 
-        // Build movement vector
         moveVector.set(0, 0, 0);
         moveVector.addScaledVector(forwardVector, moveForward);
         moveVector.addScaledVector(rightVector, moveRight);
@@ -1426,80 +517,10 @@
       }
 
       // Update firing animation
-      if (firingAnim.active) {
-        firingAnim.time += dt;
-        const t = firingAnim.time;
-        const duration = firingAnim.duration;
+      updateFiringAnimation(firingAnim, howitzerData, dt);
 
-        if (t < duration) {
-          // Muzzle flash - quick fade out
-          const flashDuration = 0.1;
-          if (t < flashDuration) {
-            muzzleFlash.material.opacity = 1 - (t / flashDuration);
-            muzzleFlash.scale.setScalar(1.2 + t * 3); // Expand as it fades
-          } else {
-            muzzleFlash.material.opacity = 0;
-          }
-
-          // Barrel recoil - fast back, slow return
-          const recoilPhase = t * firingAnim.barrelRecoilSpeed;
-          const barrelOffset = firingAnim.barrelRecoilDist * Math.exp(-recoilPhase * 2) * Math.sin(recoilPhase * Math.PI);
-          const currentBarrelRecoil = Math.max(0, barrelOffset);
-          innerBarrel.position.z = innerBarrelBaseZ - currentBarrelRecoil;
-          muzzleBrake.position.z = muzzleBrakeBaseZ - currentBarrelRecoil;
-
-          // Outer barrel secondary recoil - double speed, quarter distance
-          const outerRecoilPhase = t * firingAnim.outerRecoilSpeed;
-          const outerBarrelOffset = (firingAnim.barrelRecoilDist * 0.25) * Math.exp(-outerRecoilPhase * 2) * Math.sin(outerRecoilPhase * Math.PI);
-          outerBarrel.position.z = outerBarrelBaseZ - Math.max(0, outerBarrelOffset);
-
-          // Cannon body recoil and rock
-          const cannonPhase = t * 8;
-          const dampening = Math.exp(-t * 5);
-
-          // Rock upward (muzzle tips up) then settle with oscillation
-          const rockAngle = firingAnim.cannonRockAngle * dampening * Math.sin(cannonPhase);
-          carriageGroup.rotation.x = carriageBaseRotX - rockAngle;
-
-          // Slide back slightly
-          const slideBack = firingAnim.cannonRecoilDist * dampening * (1 - Math.cos(cannonPhase * 0.5));
-          carriageGroup.position.z = carriageBaseZ - slideBack;
-
-          // Rotate wheels based on movement (backwards = negative rotation)
-          const wheelRotation = slideBack / wheelRadius;
-          leftWheel.rotation.x = wheelRotation;
-          rightWheel.rotation.x = wheelRotation;
-
-        } else {
-          // Animation complete - reset everything
-          firingAnim.active = false;
-          muzzleFlash.material.opacity = 0;
-          innerBarrel.position.z = innerBarrelBaseZ;
-          outerBarrel.position.z = outerBarrelBaseZ;
-          muzzleBrake.position.z = muzzleBrakeBaseZ;
-          carriageGroup.rotation.x = carriageBaseRotX;
-          carriageGroup.position.z = carriageBaseZ;
-          leftWheel.rotation.x = 0;
-          rightWheel.rotation.x = 0;
-        }
-      }
-
-      // Update projectiles (ballistic trajectory)
-      for (let i = projectiles.length - 1; i >= 0; i--) {
-        const proj = projectiles[i];
-
-        // Apply gravity: v = v + g * dt
-        proj.velocity.addScaledVector(gravity, dt);
-
-        // Update position: p = p + v * dt
-        proj.mesh.position.addScaledVector(proj.velocity, dt);
-
-        // Remove if hit ground or too far away
-        if (proj.mesh.position.y < 0 || proj.mesh.position.length() > 500) {
-          scene.remove(proj.mesh);
-          projectiles.splice(i, 1);
-        }
-      }
+      // Update projectiles
+      projectileSystem.update(dt);
 
       // Update camera debug display
       camPosValue.textContent = `${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}`;
