@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>3D Scene</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #0b0f14;
+      overflow: hidden;
+    }
+    canvas { display: block; }
+    #heightmap-debug {
+      position: fixed;
+      right: 16px;
+      top: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      background: #000;
+    }
+    #terrain-panel, #trees-panel {
+      position: fixed;
+      right: 16px;
+      padding: 10px;
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      font-family: monospace;
+      font-size: 11px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.15);
+      min-width: 180px;
+    }
+    #terrain-panel { top: 160px; }
+    #trees-panel { top: 420px; }
+    #terrain-panel .panel-title, #trees-panel .panel-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+    }
+    #terrain-panel .param-row, #trees-panel .param-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+    #terrain-panel .param-label, #trees-panel .param-label {
+      flex: 1;
+    }
+    #terrain-panel .param-input, #trees-panel .param-input {
+      width: 55px;
+      padding: 2px 4px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 10px;
+    }
+    #terrain-panel .regen-btn, #trees-panel .regen-btn {
+      width: 100%;
+      margin-top: 8px;
+      padding: 6px;
+      background: rgba(80, 120, 200, 0.7);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: monospace;
+      font-weight: bold;
+    }
+    #terrain-panel .regen-btn:hover, #trees-panel .regen-btn:hover {
+      background: rgba(100, 140, 220, 0.8);
+    }
+    #hud {
+      position: fixed;
+      left: 16px;
+      top: 16px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      font-family: monospace;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 200px;
+    }
+    .hud-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .hud-label {
+      flex: 1;
+    }
+    .hud-value {
+      min-width: 50px;
+      text-align: center;
+      background: rgba(255,255,255,0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .hud-btn {
+      width: 28px;
+      height: 28px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .hud-btn:hover {
+      background: rgba(255,255,255,0.2);
+    }
+    .hud-btn:active {
+      background: rgba(255,255,255,0.3);
+    }
+    .hud-input {
+      width: 60px;
+      padding: 4px 6px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    .hud-unit {
+      font-size: 11px;
+      color: rgba(255,255,255,0.6);
+    }
+    .fire-btn {
+      width: 100%;
+      background: rgba(200, 60, 60, 0.7);
+      font-weight: bold;
+    }
+    .fire-btn:hover {
+      background: rgba(220, 80, 80, 0.8);
+    }
+    .fire-btn:active {
+      background: rgba(255, 100, 100, 0.9);
+    }
+    .hud-divider {
+      height: 1px;
+      background: rgba(255,255,255,0.2);
+      margin: 4px 0;
+    }
+    .hud-readonly {
+      font-size: 11px;
+      color: rgba(255,255,255,0.7);
+      flex: 1;
+      text-align: right;
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="hud">
+    <div class="hud-row">
+      <span class="hud-label">Rotation</span>
+      <span id="rotationValue" class="hud-value">0°</span>
+      <button id="rotLeft" class="hud-btn">&lt;</button>
+      <button id="rotRight" class="hud-btn">&gt;</button>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Elevation</span>
+      <span id="elevationValue" class="hud-value">40°</span>
+      <button id="elevDown" class="hud-btn">-</button>
+      <button id="elevUp" class="hud-btn">+</button>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Velocity</span>
+      <input id="velocityInput" class="hud-input" type="number" value="20" min="10" max="200" step="5" />
+      <span class="hud-unit">m/s</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Mass</span>
+      <input id="massInput" class="hud-input" type="number" value="10" min="1" max="100" step="1" />
+      <span class="hud-unit">kg</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Inner Recoil</span>
+      <input id="recoilSpeedInput" class="hud-input" type="number" value="2" min="1" max="20" step="1" />
+      <span class="hud-unit"></span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Outer Recoil</span>
+      <input id="outerRecoilSpeedInput" class="hud-input" type="number" value="4" min="1" max="20" step="1" />
+      <span class="hud-unit"></span>
+    </div>
+    <div class="hud-row">
+      <button id="fireBtn" class="hud-btn fire-btn">FIRE</button>
+    </div>
+    <div class="hud-divider"></div>
+    <div class="hud-row">
+      <span class="hud-label">Cam Pos</span>
+      <span id="camPosValue" class="hud-value hud-readonly">0, 0, 0</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Cam Rot</span>
+      <span id="camRotValue" class="hud-value hud-readonly">0°, 0°</span>
+    </div>
+    <div class="hud-row">
+      <label class="hud-label" style="cursor:pointer;">
+        <input type="checkbox" id="flyingCam" style="margin-right:6px;" />
+        Flying Camera
+      </label>
+    </div>
+    <div class="hud-divider"></div>
+    <div class="hud-row">
+      <span class="hud-label">Terrain Y</span>
+      <input id="terrainYInput" class="hud-input" type="number" value="-5" step="1" />
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Hour</span>
+      <input id="hourInput" class="hud-input" type="number" value="12" min="0" max="24" step="0.5" />
+      <span id="hourDisplay" class="hud-unit">12:00</span>
+    </div>
+    <div class="hud-row">
+      <label class="hud-label" style="cursor:pointer;">
+        <input type="checkbox" id="lockLighting" style="margin-right:6px;" checked />
+        Lock Lighting
+      </label>
+    </div>
+  </div>
+  <canvas id="heightmap-debug" width="128" height="128"></canvas>
+  <div id="terrain-panel">
+    <div class="panel-title">Terrain Config</div>
+    <div class="param-row">
+      <span class="param-label">Scale</span>
+      <input class="param-input" id="terrainScale" type="number" value="0.03" step="0.005" min="0.01" max="0.1">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Octaves</span>
+      <input class="param-input" id="terrainOctaves" type="number" value="5" step="1" min="1" max="8">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Persistence</span>
+      <input class="param-input" id="terrainPersistence" type="number" value="0.45" step="0.05" min="0.1" max="0.9">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Lacunarity</span>
+      <input class="param-input" id="terrainLacunarity" type="number" value="2.0" step="0.1" min="1.0" max="4.0">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Height</span>
+      <input class="param-input" id="terrainHeightMult" type="number" value="25" step="1" min="5" max="60">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Ridge Freq</span>
+      <input class="param-input" id="terrainRidgeFreq" type="number" value="0.5" step="0.1" min="0.1" max="1.0">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Seed</span>
+      <input class="param-input" id="terrainSeed" type="number" value="42" step="1" min="1" max="9999">
+    </div>
+    <button class="regen-btn" id="regenTerrainBtn">Regenerate</button>
+  </div>
+  <div id="trees-panel" class="config-panel">
+    <div class="panel-title">Trees Config</div>
+    <div class="param-row">
+      <span class="param-label">Density</span>
+      <input class="param-input" id="treeDensity" type="number" value="0.15" step="0.05" min="0" max="1">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Max Slope</span>
+      <input class="param-input" id="treeMaxSlope" type="number" value="35" step="5" min="0" max="60">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Clustering</span>
+      <input class="param-input" id="treeCluster" type="number" value="0.6" step="0.1" min="0" max="1">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Sparseness</span>
+      <input class="param-input" id="treeSparse" type="number" value="0.3" step="0.1" min="0" max="1">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Seed</span>
+      <input class="param-input" id="treeSeed" type="number" value="12345" step="1" min="1" max="99999">
+    </div>
+    <button class="regen-btn" id="regenTreesBtn">Regenerate Trees</button>
+  </div>
+  <script type="module">
+    import * as THREE from 'three';
+
+    // Import modules
+    import { setupRenderer, createLighting } from './lighting.js';
+    import { createSkybox, createSun, setupHourControl } from './sun.js';
+    import { createTerrain, renderHeightmapDebug, createTerrainRegeneration, setupTerrainYControl } from './terrain.js';
+    import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createProjectileSystem } from './cannon.js';
+    import { createTrees, setupTreeControls, regenerateTrees, updateTreesY } from './trees.js';
+
+    const CONFIG = {
+      camera: {
+        fov: 65,
+        near: 0.1,
+        far: 1000,
+        position: { x: 1.5, y: 1.6, z: 2.2 },
+        initialYawDeg: 356,
+        initialPitchDeg: 0
+      },
+      axis: {
+        origin: { x: 0, y: 0.5, z: 0 },
+        size: 2,
+        labelOffset: 2.3,
+        labelSize: 0.3
+      },
+      controls: {
+        lookSensitivity: 0.003,
+        maxPitchDeg: 89,
+        moveSpeed: 5.0
+      },
+      terrain: {
+        worldSize: 150,
+        resolution: 48,
+        offsetX: 0,
+        offsetY: -5,
+        offsetZ: -60
+      },
+      sun: {
+        hour: 12,
+        skyRadius: 400,
+        sunDistance: 380,
+        sunSize: 30
+      }
+    };
+
+    // ========== RENDERER & SCENE ==========
+    const renderer = setupRenderer();
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1a2e);
+
+    // ========== CAMERA ==========
+    const camera = new THREE.PerspectiveCamera(
+      CONFIG.camera.fov,
+      window.innerWidth / window.innerHeight,
+      CONFIG.camera.near,
+      CONFIG.camera.far
+    );
+    camera.position.set(
+      CONFIG.camera.position.x,
+      CONFIG.camera.position.y,
+      CONFIG.camera.position.z
+    );
+    camera.rotation.order = 'YXZ';
+
+    // ========== LIGHTING ==========
+    const lighting = createLighting(scene);
+
+    // ========== SKYBOX ==========
+    const skybox = createSkybox(CONFIG.sun);
+    scene.add(skybox);
+
+    // ========== SUN ==========
+    const sun = createSun(CONFIG.sun);
+    scene.add(sun);
+
+    // ========== HOUR CONTROL ==========
+    const hourControl = setupHourControl(sun, skybox, scene, lighting, CONFIG.sun);
+
+    // ========== AXIS HELPER ==========
+    const axisOrigin = new THREE.Vector3(
+      CONFIG.axis.origin.x,
+      CONFIG.axis.origin.y,
+      CONFIG.axis.origin.z
+    );
+
+    function createAxisLine(direction, color, length) {
+      const material = new THREE.LineBasicMaterial({ color });
+      const points = [
+        axisOrigin.clone(),
+        axisOrigin.clone().add(direction.clone().multiplyScalar(length))
+      ];
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      return new THREE.Line(geometry, material);
+    }
+
+    const xAxis = createAxisLine(new THREE.Vector3(1, 0, 0), 0xff4444, CONFIG.axis.size);
+    const yAxis = createAxisLine(new THREE.Vector3(0, 1, 0), 0x44ff44, CONFIG.axis.size);
+    const zAxis = createAxisLine(new THREE.Vector3(0, 0, 1), 0x4444ff, CONFIG.axis.size);
+    scene.add(xAxis, yAxis, zAxis);
+
+    function makeAxisLabel(text, color) {
+      const size = 128;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, size, size);
+      ctx.font = 'bold 80px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = color;
+      ctx.fillText(text, size / 2, size / 2);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(CONFIG.axis.labelSize, CONFIG.axis.labelSize, 1);
+      return sprite;
+    }
+
+    const labelX = makeAxisLabel('X', '#ff4444');
+    const labelY = makeAxisLabel('Y', '#44ff44');
+    const labelZ = makeAxisLabel('Z', '#4444ff');
+
+    labelX.position.copy(axisOrigin).add(new THREE.Vector3(CONFIG.axis.labelOffset, 0, 0));
+    labelY.position.copy(axisOrigin).add(new THREE.Vector3(0, CONFIG.axis.labelOffset, 0));
+    labelZ.position.copy(axisOrigin).add(new THREE.Vector3(0, 0, CONFIG.axis.labelOffset));
+
+    scene.add(labelX, labelY, labelZ);
+
+    // ========== TERRAIN ==========
+    const terrainData = createTerrain(CONFIG.terrain);
+    scene.add(terrainData.mesh);
+    renderHeightmapDebug(terrainData.heightmap);
+
+    // Setup terrain controls
+    const terrainRegen = createTerrainRegeneration(terrainData, CONFIG.terrain);
+    setupTerrainYControl(terrainData, CONFIG.terrain);
+
+    // ========== TREES ==========
+    let trees = createTrees(terrainData.heightmap, CONFIG.terrain);
+    scene.add(trees);
+
+    // Setup tree controls
+    const treeControls = setupTreeControls(scene, terrainData.heightmap, CONFIG.terrain);
+
+    // Link terrain regeneration to tree regeneration
+    document.getElementById('regenTerrainBtn').addEventListener('click', () => {
+      // Wait a tick for terrain to regenerate, then update trees
+      setTimeout(() => {
+        treeControls.updateHeightmap(terrainData.heightmap);
+        treeControls.regenerate();
+      }, 10);
+    });
+
+    // Update trees Y position when terrain Y changes
+    document.getElementById('terrainYInput').addEventListener('input', () => {
+      const newY = parseFloat(document.getElementById('terrainYInput').value) || 0;
+      updateTreesY(scene, newY);
+    });
+
+    // ========== HOWITZER ==========
+    const howitzerData = createHowitzer(scene);
+    const firingAnim = createFiringAnimation();
+    const cannonControls = createCannonControls(howitzerData);
+    const projectileSystem = createProjectileSystem(scene, howitzerData, firingAnim);
+
+    // Connect fire button
+    document.getElementById('fireBtn').addEventListener('click', projectileSystem.fire);
+
+    // ========== CAMERA CONTROLS ==========
+    let yaw = THREE.MathUtils.degToRad(CONFIG.camera.initialYawDeg);
+    let pitch = THREE.MathUtils.degToRad(CONFIG.camera.initialPitchDeg);
+    const maxPitch = THREE.MathUtils.degToRad(CONFIG.controls.maxPitchDeg);
+
+    function applyCameraOrientation() {
+      camera.rotation.y = yaw;
+      camera.rotation.x = pitch;
+    }
+    applyCameraOrientation();
+
+    // Flying camera mode
+    let flyingCameraEnabled = false;
+    const flyingCamCheckbox = document.getElementById('flyingCam');
+    flyingCamCheckbox.addEventListener('change', (e) => {
+      flyingCameraEnabled = e.target.checked;
+    });
+
+    // Mouse controls
+    let isDragging = false;
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+
+    renderer.domElement.addEventListener('mousedown', (event) => {
+      if (event.button !== 0) return;
+      if (event.target.closest('#hud')) return;
+      isDragging = true;
+      lastMouseX = event.clientX;
+      lastMouseY = event.clientY;
+    });
+
+    window.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+
+    window.addEventListener('mousemove', (event) => {
+      if (!isDragging) return;
+      const dx = event.clientX - lastMouseX;
+      const dy = event.clientY - lastMouseY;
+      lastMouseX = event.clientX;
+      lastMouseY = event.clientY;
+
+      yaw -= dx * CONFIG.controls.lookSensitivity;
+      pitch -= dy * CONFIG.controls.lookSensitivity;
+      pitch = THREE.MathUtils.clamp(pitch, -maxPitch, maxPitch);
+      applyCameraOrientation();
+    });
+
+    // Keyboard controls
+    const pressedKeys = new Set();
+    window.addEventListener('keydown', (event) => {
+      pressedKeys.add(event.code);
+    });
+    window.addEventListener('keyup', (event) => {
+      pressedKeys.delete(event.code);
+    });
+
+    // Movement vectors
+    const moveVector = new THREE.Vector3();
+    const forwardVector = new THREE.Vector3();
+    const rightVector = new THREE.Vector3();
+    const worldUp = new THREE.Vector3(0, 1, 0);
+
+    // HUD elements
+    const camPosValue = document.getElementById('camPosValue');
+    const camRotValue = document.getElementById('camRotValue');
+
+    // ========== ANIMATION LOOP ==========
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+
+      // Camera movement
+      const moveForward = (pressedKeys.has('KeyW') ? 1 : 0) - (pressedKeys.has('KeyS') ? 1 : 0);
+      const moveRight = (pressedKeys.has('KeyD') ? 1 : 0) - (pressedKeys.has('KeyA') ? 1 : 0);
+
+      if (moveForward !== 0 || moveRight !== 0) {
+        camera.getWorldDirection(forwardVector);
+
+        if (!flyingCameraEnabled) {
+          forwardVector.y = 0;
+        }
+        forwardVector.normalize();
+
+        const tempForward = forwardVector.clone();
+        tempForward.y = 0;
+        tempForward.normalize();
+        rightVector.crossVectors(tempForward, worldUp).normalize();
+
+        moveVector.set(0, 0, 0);
+        moveVector.addScaledVector(forwardVector, moveForward);
+        moveVector.addScaledVector(rightVector, moveRight);
+
+        if (moveVector.lengthSq() > 0) {
+          moveVector.normalize();
+          camera.position.addScaledVector(moveVector, CONFIG.controls.moveSpeed * dt);
+        }
+      }
+
+      // Update firing animation
+      updateFiringAnimation(firingAnim, howitzerData, dt);
+
+      // Update projectiles
+      projectileSystem.update(dt);
+
+      // Update camera debug display
+      camPosValue.textContent = `${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}`;
+      const yawDeg = THREE.MathUtils.radToDeg(yaw).toFixed(0);
+      const pitchDeg = THREE.MathUtils.radToDeg(pitch).toFixed(0);
+      camRotValue.textContent = `${yawDeg}°, ${pitchDeg}°`;
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
