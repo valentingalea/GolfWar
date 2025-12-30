@@ -19,10 +19,9 @@
       border: 2px solid rgba(255,255,255,0.3);
       background: #000;
     }
-    #terrain-panel {
+    #terrain-panel, #trees-panel {
       position: fixed;
       right: 16px;
-      top: 160px;
       padding: 10px;
       background: rgba(0,0,0,0.8);
       color: #fff;
@@ -32,22 +31,24 @@
       border: 1px solid rgba(255,255,255,0.15);
       min-width: 180px;
     }
-    #terrain-panel .panel-title {
+    #terrain-panel { top: 160px; }
+    #trees-panel { top: 420px; }
+    #terrain-panel .panel-title, #trees-panel .panel-title {
       font-weight: bold;
       margin-bottom: 8px;
       padding-bottom: 4px;
       border-bottom: 1px solid rgba(255,255,255,0.2);
     }
-    #terrain-panel .param-row {
+    #terrain-panel .param-row, #trees-panel .param-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 5px;
     }
-    #terrain-panel .param-label {
+    #terrain-panel .param-label, #trees-panel .param-label {
       flex: 1;
     }
-    #terrain-panel .param-input {
+    #terrain-panel .param-input, #trees-panel .param-input {
       width: 55px;
       padding: 2px 4px;
       border: 1px solid rgba(255,255,255,0.3);
@@ -57,7 +58,7 @@
       font-family: monospace;
       font-size: 10px;
     }
-    #terrain-panel .regen-btn {
+    #terrain-panel .regen-btn, #trees-panel .regen-btn {
       width: 100%;
       margin-top: 8px;
       padding: 6px;
@@ -69,7 +70,7 @@
       font-family: monospace;
       font-weight: bold;
     }
-    #terrain-panel .regen-btn:hover {
+    #terrain-panel .regen-btn:hover, #trees-panel .regen-btn:hover {
       background: rgba(100, 140, 220, 0.8);
     }
     #hud {
@@ -267,6 +268,30 @@
     </div>
     <button class="regen-btn" id="regenTerrainBtn">Regenerate</button>
   </div>
+  <div id="trees-panel" class="config-panel">
+    <div class="panel-title">Trees Config</div>
+    <div class="param-row">
+      <span class="param-label">Density</span>
+      <input class="param-input" id="treeDensity" type="number" value="0.15" step="0.05" min="0" max="1">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Max Slope</span>
+      <input class="param-input" id="treeMaxSlope" type="number" value="35" step="5" min="0" max="60">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Clustering</span>
+      <input class="param-input" id="treeCluster" type="number" value="0.6" step="0.1" min="0" max="1">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Sparseness</span>
+      <input class="param-input" id="treeSparse" type="number" value="0.3" step="0.1" min="0" max="1">
+    </div>
+    <div class="param-row">
+      <span class="param-label">Seed</span>
+      <input class="param-input" id="treeSeed" type="number" value="12345" step="1" min="1" max="99999">
+    </div>
+    <button class="regen-btn" id="regenTreesBtn">Regenerate Trees</button>
+  </div>
   <script type="module">
     import * as THREE from 'three';
 
@@ -275,6 +300,7 @@
     import { createSkybox, createSun, setupHourControl } from './sun.js';
     import { createTerrain, renderHeightmapDebug, createTerrainRegeneration, setupTerrainYControl } from './terrain.js';
     import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createProjectileSystem } from './cannon.js';
+    import { createTrees, setupTreeControls, regenerateTrees, updateTreesY } from './trees.js';
 
     const CONFIG = {
       camera: {
@@ -403,8 +429,30 @@
     renderHeightmapDebug(terrainData.heightmap);
 
     // Setup terrain controls
-    createTerrainRegeneration(terrainData, CONFIG.terrain);
+    const terrainRegen = createTerrainRegeneration(terrainData, CONFIG.terrain);
     setupTerrainYControl(terrainData, CONFIG.terrain);
+
+    // ========== TREES ==========
+    let trees = createTrees(terrainData.heightmap, CONFIG.terrain);
+    scene.add(trees);
+
+    // Setup tree controls
+    const treeControls = setupTreeControls(scene, terrainData.heightmap, CONFIG.terrain);
+
+    // Link terrain regeneration to tree regeneration
+    document.getElementById('regenTerrainBtn').addEventListener('click', () => {
+      // Wait a tick for terrain to regenerate, then update trees
+      setTimeout(() => {
+        treeControls.updateHeightmap(terrainData.heightmap);
+        treeControls.regenerate();
+      }, 10);
+    });
+
+    // Update trees Y position when terrain Y changes
+    document.getElementById('terrainYInput').addEventListener('input', () => {
+      const newY = parseFloat(document.getElementById('terrainYInput').value) || 0;
+      updateTreesY(scene, newY);
+    });
 
     // ========== HOWITZER ==========
     const howitzerData = createHowitzer(scene);
