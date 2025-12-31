@@ -1,4 +1,42 @@
 // Terrain Heightmap Generator
+// Supports both procedural generation and RAW file import
+
+// Load heightmap from a 16-bit RAW file
+// heightScale: multiplier to convert raw values (0-65535) to geometry Y
+export async function loadHeightmapFromRaw(url, width = 1024, height = 1024, heightScale = 0.01) {
+  const response = await fetch(url);
+  const buffer = await response.arrayBuffer();
+  const rawData = new Uint16Array(buffer);
+
+  const data = new Float32Array(width * height);
+  let minHeight = Infinity;
+  let maxHeight = -Infinity;
+
+  for (let i = 0; i < rawData.length; i++) {
+    const h = rawData[i] * heightScale;
+    data[i] = h;
+    minHeight = Math.min(minHeight, h);
+    maxHeight = Math.max(maxHeight, h);
+  }
+
+  console.log(`Loaded RAW heightmap: ${width}x${height}, scale: ${heightScale}, height range: ${minHeight.toFixed(2)} to ${maxHeight.toFixed(2)}`);
+
+  return {
+    data,
+    width,
+    height,
+    minHeight,
+    maxHeight,
+    getHeight(u, v) {
+      const x = Math.floor(u * (width - 1));
+      const y = Math.floor(v * (height - 1));
+      const clampedX = Math.max(0, Math.min(width - 1, x));
+      const clampedY = Math.max(0, Math.min(height - 1, y));
+      return data[clampedY * width + clampedX];
+    }
+  };
+}
+
 // Generates smooth rolling hills using layered noise
 
 // Simple seeded random number generator

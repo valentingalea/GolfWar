@@ -6,7 +6,7 @@ import {
   GOLF_TERRAIN_CONFIG
 } from './terrain-heightmap.js';
 
-// Create terrain mesh from heightmap
+// Create terrain mesh from procedurally generated heightmap
 export function createTerrain(config) {
   const { worldSize, resolution, offsetX, offsetY, offsetZ } = config;
 
@@ -43,6 +43,34 @@ export function createTerrain(config) {
   return { mesh: terrain, heightmap };
 }
 
+// Create terrain mesh from an imported heightmap
+export function createTerrainFromHeightmap(heightmap, config) {
+  const geometry = buildTerrainGeometry(heightmap, config);
+
+  const material = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    flatShading: true,
+    roughness: 0.8,
+    metalness: 0.1,
+    side: THREE.DoubleSide
+  });
+
+  const terrain = new THREE.Mesh(geometry, material);
+  terrain.receiveShadow = true;
+
+  // Debug wireframe
+  const wireframeMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.1
+  });
+  const wireframe = new THREE.Mesh(geometry, wireframeMaterial);
+  terrain.add(wireframe);
+
+  return { mesh: terrain, heightmap };
+}
+
 // Build terrain geometry from heightmap
 function buildTerrainGeometry(heightmap, config) {
   const { worldSize, resolution, offsetX, offsetZ } = config;
@@ -61,7 +89,7 @@ function buildTerrainGeometry(heightmap, config) {
       const v = z / (resolution - 1);
       const worldX = (u - 0.5) * worldSize + offsetX;
       const worldZ = (v - 0.5) * worldSize + offsetZ;
-      const height = heightmap.getHeightInterpolated(u, v);
+      const height = heightmap.getHeight(u, v);
 
       vertices.push(worldX, height, worldZ);
 
@@ -110,13 +138,15 @@ function buildTerrainGeometry(heightmap, config) {
 }
 
 // Render heightmap to debug canvas
-export function renderHeightmapDebug(heightmap) {
+export function renderHeightmapDebug(heightmap, scale = 1) {
   const canvas = document.getElementById('heightmap-debug');
   const ctx = canvas.getContext('2d');
   const { width, height, data, minHeight, maxHeight } = heightmap;
 
-  canvas.width = width;
-  canvas.height = height;
+  const displayWidth = Math.floor(width * scale);
+  const displayHeight = Math.floor(height * scale);
+  canvas.width = displayWidth;
+  canvas.height = displayHeight;
 
   const imageData = ctx.createImageData(width, height);
 
@@ -134,7 +164,14 @@ export function renderHeightmapDebug(heightmap) {
     }
   }
 
-  ctx.putImageData(imageData, 0, 0);
+  // Draw scaled image
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = width;
+  tempCanvas.height = height;
+  const tempCtx = tempCanvas.getContext('2d');
+  tempCtx.putImageData(imageData, 0, 0);
+
+  ctx.drawImage(tempCanvas, 0, 0, displayWidth, displayHeight);
 }
 
 // Terrain regeneration system

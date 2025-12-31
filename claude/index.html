@@ -220,8 +220,12 @@
     </div>
     <div class="hud-divider"></div>
     <div class="hud-row">
-      <span class="hud-label">Terrain Y</span>
-      <input id="terrainYInput" class="hud-input" type="number" value="-5" step="1" />
+      <span class="hud-label">Height Scale</span>
+      <input id="heightScaleInput" class="hud-input" type="number" value="0.01" step="0.001" min="0.001" max="1" />
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Y Offset</span>
+      <input id="terrainYOffsetInput" class="hud-input" type="number" value="-1000" step="10" />
     </div>
     <div class="hud-row">
       <span class="hud-label">Hour</span>
@@ -236,71 +240,18 @@
     </div>
   </div>
   <canvas id="heightmap-debug" width="128" height="128"></canvas>
-  <div id="terrain-panel">
-    <div class="panel-title">Terrain Config</div>
-    <div class="param-row">
-      <span class="param-label">Scale</span>
-      <input class="param-input" id="terrainScale" type="number" value="0.03" step="0.005" min="0.01" max="0.1">
-    </div>
-    <div class="param-row">
-      <span class="param-label">Octaves</span>
-      <input class="param-input" id="terrainOctaves" type="number" value="5" step="1" min="1" max="8">
-    </div>
-    <div class="param-row">
-      <span class="param-label">Persistence</span>
-      <input class="param-input" id="terrainPersistence" type="number" value="0.45" step="0.05" min="0.1" max="0.9">
-    </div>
-    <div class="param-row">
-      <span class="param-label">Lacunarity</span>
-      <input class="param-input" id="terrainLacunarity" type="number" value="2.0" step="0.1" min="1.0" max="4.0">
-    </div>
-    <div class="param-row">
-      <span class="param-label">Height</span>
-      <input class="param-input" id="terrainHeightMult" type="number" value="25" step="1" min="5" max="60">
-    </div>
-    <div class="param-row">
-      <span class="param-label">Ridge Freq</span>
-      <input class="param-input" id="terrainRidgeFreq" type="number" value="0.5" step="0.1" min="0.1" max="1.0">
-    </div>
-    <div class="param-row">
-      <span class="param-label">Seed</span>
-      <input class="param-input" id="terrainSeed" type="number" value="42" step="1" min="1" max="9999">
-    </div>
-    <button class="regen-btn" id="regenTerrainBtn">Regenerate</button>
-  </div>
-  <div id="trees-panel" class="config-panel">
-    <div class="panel-title">Trees Config</div>
-    <div class="param-row">
-      <span class="param-label">Density</span>
-      <input class="param-input" id="treeDensity" type="number" value="0.15" step="0.05" min="0" max="1">
-    </div>
-    <div class="param-row">
-      <span class="param-label">Max Slope</span>
-      <input class="param-input" id="treeMaxSlope" type="number" value="35" step="5" min="0" max="60">
-    </div>
-    <div class="param-row">
-      <span class="param-label">Clustering</span>
-      <input class="param-input" id="treeCluster" type="number" value="0.6" step="0.1" min="0" max="1">
-    </div>
-    <div class="param-row">
-      <span class="param-label">Sparseness</span>
-      <input class="param-input" id="treeSparse" type="number" value="0.3" step="0.1" min="0" max="1">
-    </div>
-    <div class="param-row">
-      <span class="param-label">Seed</span>
-      <input class="param-input" id="treeSeed" type="number" value="12345" step="1" min="1" max="99999">
-    </div>
-    <button class="regen-btn" id="regenTreesBtn">Regenerate Trees</button>
-  </div>
+  <!-- Terrain and trees panels disabled - using imported RAW heightmap -->
   <script type="module">
     import * as THREE from 'three';
 
     // Import modules
     import { setupRenderer, createLighting } from './lighting.js';
     import { createSkybox, createSun, setupHourControl } from './sun.js';
-    import { createTerrain, renderHeightmapDebug, createTerrainRegeneration, setupTerrainYControl } from './terrain.js';
+    import { createTerrainFromHeightmap, renderHeightmapDebug } from './terrain.js';
+    import { loadHeightmapFromRaw } from './terrain-heightmap.js';
     import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createProjectileSystem } from './cannon.js';
-    import { createTrees, setupTreeControls, regenerateTrees, updateTreesY } from './trees.js';
+    // Trees disabled for now
+    // import { createTrees, setupTreeControls, regenerateTrees, updateTreesY } from './trees.js';
 
     const CONFIG = {
       camera: {
@@ -323,11 +274,11 @@
         moveSpeed: 5.0
       },
       terrain: {
-        worldSize: 150,
-        resolution: 48,
+        worldSize: 5000,     // 5000m width from RAW generator
+        resolution: 256,     // Higher resolution mesh
         offsetX: 0,
-        offsetY: -5,
-        offsetZ: -60
+        offsetY: 0,
+        offsetZ: 0
       },
       sun: {
         hour: 12,
@@ -423,36 +374,46 @@
 
     scene.add(labelX, labelY, labelZ);
 
-    // ========== TERRAIN ==========
-    const terrainData = createTerrain(CONFIG.terrain);
-    scene.add(terrainData.mesh);
-    renderHeightmapDebug(terrainData.heightmap);
+    // ========== TERRAIN (async load from RAW file) ==========
+    let terrainData = null;
+    const heightScaleInput = document.getElementById('heightScaleInput');
+    const terrainYOffsetInput = document.getElementById('terrainYOffsetInput');
 
-    // Setup terrain controls
-    const terrainRegen = createTerrainRegeneration(terrainData, CONFIG.terrain);
-    setupTerrainYControl(terrainData, CONFIG.terrain);
+    function applyYOffset() {
+      if (terrainData) {
+        terrainData.mesh.position.y = parseFloat(terrainYOffsetInput.value) || 0;
+      }
+    }
 
-    // ========== TREES ==========
-    let trees = createTrees(terrainData.heightmap, CONFIG.terrain);
-    scene.add(trees);
+    async function loadTerrain() {
+      const heightScale = parseFloat(heightScaleInput.value) || 0.01;
+      console.log('Loading terrain from RAW file...');
+      const heightmap = await loadHeightmapFromRaw('./terrain.raw', 1024, 1024, heightScale);
 
-    // Setup tree controls
-    const treeControls = setupTreeControls(scene, terrainData.heightmap, CONFIG.terrain);
+      // Remove old terrain if exists
+      if (terrainData) {
+        scene.remove(terrainData.mesh);
+        terrainData.mesh.geometry.dispose();
+        terrainData.mesh.material.dispose();
+      }
 
-    // Link terrain regeneration to tree regeneration
-    document.getElementById('regenTerrainBtn').addEventListener('click', () => {
-      // Wait a tick for terrain to regenerate, then update trees
-      setTimeout(() => {
-        treeControls.updateHeightmap(terrainData.heightmap);
-        treeControls.regenerate();
-      }, 10);
-    });
+      terrainData = createTerrainFromHeightmap(heightmap, CONFIG.terrain);
+      applyYOffset();
+      scene.add(terrainData.mesh);
+      renderHeightmapDebug(terrainData.heightmap, 0.125);
+      console.log('Terrain loaded successfully');
+    }
 
-    // Update trees Y position when terrain Y changes
-    document.getElementById('terrainYInput').addEventListener('input', () => {
-      const newY = parseFloat(document.getElementById('terrainYInput').value) || 0;
-      updateTreesY(scene, newY);
-    });
+    // Reload terrain when height scale changes
+    heightScaleInput.addEventListener('change', loadTerrain);
+    terrainYOffsetInput.addEventListener('input', applyYOffset);
+
+    // Start loading terrain
+    loadTerrain();
+
+    // Trees disabled for now
+    // let trees = createTrees(terrainData.heightmap, CONFIG.terrain);
+    // scene.add(trees);
 
     // ========== HOWITZER ==========
     const howitzerData = createHowitzer(scene);
