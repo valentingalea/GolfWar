@@ -45,7 +45,7 @@ function createThumb(material, isLeft) {
   // Base/metacarpal
   const baseGeom = new THREE.CylinderGeometry(0.012, 0.014, 0.035, 8);
   const base = new THREE.Mesh(baseGeom, material);
-  base.rotation.x = Math.PI / 2;
+  base.rotation.x = -Math.PI / 2;
   base.rotation.z = side * 0.8;
   base.position.z = 0.015;
   thumb.add(base);
@@ -164,10 +164,8 @@ function createHand(isLeft) {
   forearm.position.set(0, 0, -0.11 * palmScale);
   hand.add(forearm);
 
-  // Mirror left hand on YZ axis (flip X) so thumbs face outward
-  if (isLeft) {
-    hand.scale.x = -1;
-  }
+  // Miror so thumbs are on outside
+  hand.scale.x = -1;
 
   return hand;
 }
@@ -183,13 +181,13 @@ export function createFirstPersonHands(camera) {
 
   // Left hand
   const leftHand = createHand(true);
-  leftHand.position.set(-0.22, -0.15, -0.35);
+  leftHand.position.set(-0.15, -0.15, -0.35);
   leftHand.rotation.set(defaultRotX, 0, defaultRotZ);
   handsRig.add(leftHand);
 
   // Right hand
   const rightHand = createHand(false);
-  rightHand.position.set(0.22, -0.15, -0.35);
+  rightHand.position.set(0.15, -0.15, -0.35);
   rightHand.rotation.set(defaultRotX, 0, -defaultRotZ);
   handsRig.add(rightHand);
 
