@@ -12,67 +12,6 @@
       overflow: hidden;
     }
     canvas { display: block; }
-    #heightmap-debug {
-      position: fixed;
-      right: 16px;
-      top: 16px;
-      border: 2px solid rgba(255,255,255,0.3);
-      background: #000;
-    }
-    #terrain-panel, #trees-panel {
-      position: fixed;
-      right: 16px;
-      padding: 10px;
-      background: rgba(0,0,0,0.8);
-      color: #fff;
-      font-family: monospace;
-      font-size: 11px;
-      border-radius: 4px;
-      border: 1px solid rgba(255,255,255,0.15);
-      min-width: 180px;
-    }
-    #terrain-panel { top: 160px; }
-    #trees-panel { top: 420px; }
-    #terrain-panel .panel-title, #trees-panel .panel-title {
-      font-weight: bold;
-      margin-bottom: 8px;
-      padding-bottom: 4px;
-      border-bottom: 1px solid rgba(255,255,255,0.2);
-    }
-    #terrain-panel .param-row, #trees-panel .param-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 5px;
-    }
-    #terrain-panel .param-label, #trees-panel .param-label {
-      flex: 1;
-    }
-    #terrain-panel .param-input, #trees-panel .param-input {
-      width: 55px;
-      padding: 2px 4px;
-      border: 1px solid rgba(255,255,255,0.3);
-      background: rgba(255,255,255,0.1);
-      color: #fff;
-      border-radius: 3px;
-      font-family: monospace;
-      font-size: 10px;
-    }
-    #terrain-panel .regen-btn, #trees-panel .regen-btn {
-      width: 100%;
-      margin-top: 8px;
-      padding: 6px;
-      background: rgba(80, 120, 200, 0.7);
-      border: 1px solid rgba(255,255,255,0.3);
-      color: #fff;
-      border-radius: 4px;
-      cursor: pointer;
-      font-family: monospace;
-      font-weight: bold;
-    }
-    #terrain-panel .regen-btn:hover, #trees-panel .regen-btn:hover {
-      background: rgba(100, 140, 220, 0.8);
-    }
     #hud {
       position: fixed;
       left: 16px;
@@ -220,14 +159,6 @@
     </div>
     <div class="hud-divider"></div>
     <div class="hud-row">
-      <span class="hud-label">Height Scale</span>
-      <input id="heightScaleInput" class="hud-input" type="number" value="0.01" step="0.001" min="0.001" max="1" />
-    </div>
-    <div class="hud-row">
-      <span class="hud-label">Y Offset</span>
-      <input id="terrainYOffsetInput" class="hud-input" type="number" value="-1000" step="10" />
-    </div>
-    <div class="hud-row">
       <span class="hud-label">Hour</span>
       <input id="hourInput" class="hud-input" type="number" value="12" min="0" max="24" step="0.5" />
       <span id="hourDisplay" class="hud-unit">12:00</span>
@@ -239,25 +170,19 @@
       </label>
     </div>
   </div>
-  <canvas id="heightmap-debug" width="128" height="128"></canvas>
-  <!-- Terrain and trees panels disabled - using imported RAW heightmap -->
   <script type="module">
     import * as THREE from 'three';
 
     // Import modules
     import { setupRenderer, createLighting } from './lighting.js';
     import { createSkybox, createSun, setupHourControl } from './sun.js';
-    import { createTerrainFromHeightmap, renderHeightmapDebug } from './terrain.js';
-    import { loadHeightmapFromRaw } from './terrain-heightmap.js';
     import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createProjectileSystem } from './cannon.js';
-    // Trees disabled for now
-    // import { createTrees, setupTreeControls, regenerateTrees, updateTreesY } from './trees.js';
 
     const CONFIG = {
       camera: {
         fov: 65,
         near: 0.1,
-        far: 1000,
+        far: 5000,
         position: { x: 1.5, y: 1.6, z: 2.2 },
         initialYawDeg: 356,
         initialPitchDeg: 0
@@ -273,12 +198,8 @@
         maxPitchDeg: 89,
         moveSpeed: 5.0
       },
-      terrain: {
-        worldSize: 5000,     // 5000m width from RAW generator
-        resolution: 256,     // Higher resolution mesh
-        offsetX: 0,
-        offsetY: 0,
-        offsetZ: 0
+      floor: {
+        size: 4000  // 4k x 4k floor
       },
       sun: {
         hour: 12,
@@ -374,46 +295,22 @@
 
     scene.add(labelX, labelY, labelZ);
 
-    // ========== TERRAIN (async load from RAW file) ==========
-    let terrainData = null;
-    const heightScaleInput = document.getElementById('heightScaleInput');
-    const terrainYOffsetInput = document.getElementById('terrainYOffsetInput');
+    // ========== FLOOR (textured plane) ==========
+    const textureLoader = new THREE.TextureLoader();
+    const floorTexture = textureLoader.load('./golf_course.png');
+    floorTexture.colorSpace = THREE.SRGBColorSpace;
 
-    function applyYOffset() {
-      if (terrainData) {
-        terrainData.mesh.position.y = parseFloat(terrainYOffsetInput.value) || 0;
-      }
-    }
-
-    async function loadTerrain() {
-      const heightScale = parseFloat(heightScaleInput.value) || 0.01;
-      console.log('Loading terrain from RAW file...');
-      const heightmap = await loadHeightmapFromRaw('./terrain.raw', 1024, 1024, heightScale);
-
-      // Remove old terrain if exists
-      if (terrainData) {
-        scene.remove(terrainData.mesh);
-        terrainData.mesh.geometry.dispose();
-        terrainData.mesh.material.dispose();
-      }
-
-      terrainData = createTerrainFromHeightmap(heightmap, CONFIG.terrain);
-      applyYOffset();
-      scene.add(terrainData.mesh);
-      renderHeightmapDebug(terrainData.heightmap, 0.125);
-      console.log('Terrain loaded successfully');
-    }
-
-    // Reload terrain when height scale changes
-    heightScaleInput.addEventListener('change', loadTerrain);
-    terrainYOffsetInput.addEventListener('input', applyYOffset);
-
-    // Start loading terrain
-    loadTerrain();
-
-    // Trees disabled for now
-    // let trees = createTrees(terrainData.heightmap, CONFIG.terrain);
-    // scene.add(trees);
+    const floorGeometry = new THREE.PlaneGeometry(CONFIG.floor.size, CONFIG.floor.size);
+    const floorMaterial = new THREE.MeshStandardMaterial({
+      map: floorTexture,
+      roughness: 0.9,
+      metalness: 0.0
+    });
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.rotation.x = -Math.PI / 2; // Rotate to lie flat
+    floor.position.y = 0;
+    floor.receiveShadow = true;
+    scene.add(floor);
 
     // ========== HOWITZER ==========
     const howitzerData = createHowitzer(scene);
