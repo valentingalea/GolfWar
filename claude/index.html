@@ -197,6 +197,7 @@
     import { createSkybox, createSun, setupHourControl } from './sun.js';
     import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createProjectileSystem } from './cannon.js';
     import { createDroneSystem } from './drone.js';
+    import { createFirstPersonHands } from './hands.js';
 
     const CONFIG = {
       camera: {
@@ -252,6 +253,10 @@
       CONFIG.camera.position.z
     );
     camera.rotation.order = 'YXZ';
+    scene.add(camera); // Add camera to scene so attached objects render
+
+    // ========== FIRST PERSON HANDS ==========
+    const hands = createFirstPersonHands(camera);
 
     // ========== LIGHTING ==========
     const lighting = createLighting(scene);
@@ -378,9 +383,11 @@
       if (result.active) {
         droneBtn.textContent = 'EXIT DRONE';
         droneBtn.classList.add('active');
+        hands.setVisible(false); // Hide hands in drone view
       } else {
         droneBtn.textContent = 'LAUNCH DRONE';
         droneBtn.classList.remove('active');
+        hands.setVisible(true); // Show hands in FPS view
         // Restore saved yaw/pitch
         yaw = result.yaw;
         pitch = result.pitch;
