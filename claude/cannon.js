@@ -60,6 +60,25 @@ function createTrail(side) {
   return trailGroup;
 }
 
+// Create smoke particle texture
+function createSmokeTexture() {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+  gradient.addColorStop(0, 'rgba(200, 200, 200, 1)');
+  gradient.addColorStop(0.3, 'rgba(180, 180, 180, 0.8)');
+  gradient.addColorStop(0.6, 'rgba(150, 150, 150, 0.4)');
+  gradient.addColorStop(1, 'rgba(100, 100, 100, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 // Create muzzle flash texture
 function createMuzzleFlashTexture() {
   const size = 128;
@@ -396,9 +415,10 @@ export function createCannonControls(howitzer) {
   return { getRotation: () => rotationDeg, getElevation: () => elevationDeg };
 }
 
-// Projectile system
+// Projectile system with smoke trails
 export function createProjectileSystem(scene, howitzer, firingAnim) {
   const projectiles = [];
+  const smokeParticles = [];
   const gravity = new THREE.Vector3(0, -9.81, 0);
   const geometry = new THREE.SphereGeometry(0.15, 16, 16);
   const material = new THREE.MeshStandardMaterial({
@@ -407,10 +427,44 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
     metalness: 0.1
   });
 
+  // Smoke trail settings
+  const smokeTexture = createSmokeTexture();
+  const smokeConfig = {
+    spawnRate: 0.02,      // Time between smoke spawns (seconds)
+    lifetime: 2.0,        // How long smoke particles live
+    startSize: 0.3,       // Initial size
+    endSize: 1.5,         // Size at end of life
+    startOpacity: 0.6,    // Initial opacity
+    drift: 0.5            // Random drift speed
+  };
+
   const velocityInput = document.getElementById('velocityInput');
   const massInput = document.getElementById('massInput');
   const recoilSpeedInput = document.getElementById('recoilSpeedInput');
   const outerRecoilSpeedInput = document.getElementById('outerRecoilSpeedInput');
+
+  function createSmokeParticle(position) {
+    const smokeMaterial = new THREE.SpriteMaterial({
+      map: smokeTexture,
+      transparent: true,
+      opacity: smokeConfig.startOpacity,
+      depthWrite: false
+    });
+    const smoke = new THREE.Sprite(smokeMaterial);
+    smoke.position.copy(position);
+    smoke.scale.setScalar(smokeConfig.startSize);
+    scene.add(smoke);
+
+    return {
+      sprite: smoke,
+      age: 0,
+      drift: new THREE.Vector3(
+        (Math.random() - 0.5) * smokeConfig.drift,
+        Math.random() * smokeConfig.drift * 0.5,
+        (Math.random() - 0.5) * smokeConfig.drift
+      )
+    };
+  }
 
   function fire() {
     const velocity = parseFloat(velocityInput.value) || 20;
@@ -438,7 +492,8 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
     projectiles.push({
       mesh: projectile,
       velocity: direction.multiplyScalar(velocity),
-      mass: mass
+      mass: mass,
+      smokeTimer: 0
     });
 
     firingAnim.active = true;
@@ -447,14 +502,49 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
   }
 
   function update(dt) {
+    // Update projectiles and spawn smoke
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const proj = projectiles[i];
       proj.velocity.addScaledVector(gravity, dt);
       proj.mesh.position.addScaledVector(proj.velocity, dt);
 
+      // Spawn smoke particles
+      proj.smokeTimer += dt;
+      if (proj.smokeTimer >= smokeConfig.spawnRate) {
+        proj.smokeTimer = 0;
+        smokeParticles.push(createSmokeParticle(proj.mesh.position));
+      }
+
+      // Remove projectile if out of bounds
       if (proj.mesh.position.y < 0 || proj.mesh.position.length() > 500) {
         scene.remove(proj.mesh);
         projectiles.splice(i, 1);
+      }
+    }
+
+    // Update smoke particles
+    for (let i = smokeParticles.length - 1; i >= 0; i--) {
+      const smoke = smokeParticles[i];
+      smoke.age += dt;
+
+      if (smoke.age >= smokeConfig.lifetime) {
+        // Remove expired smoke
+        scene.remove(smoke.sprite);
+        smoke.sprite.material.dispose();
+        smokeParticles.splice(i, 1);
+      } else {
+        // Update smoke position, size, and opacity
+        const lifeRatio = smoke.age / smokeConfig.lifetime;
+
+        // Drift upward and randomly
+        smoke.sprite.position.addScaledVector(smoke.drift, dt);
+
+        // Grow over time
+        const size = smokeConfig.startSize + (smokeConfig.endSize - smokeConfig.startSize) * lifeRatio;
+        smoke.sprite.scale.setScalar(size);
+
+        // Fade out
+        smoke.sprite.material.opacity = smokeConfig.startOpacity * (1 - lifeRatio);
       }
     }
   }
