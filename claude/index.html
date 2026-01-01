@@ -96,6 +96,17 @@
       flex: 1;
       text-align: right;
     }
+    .drone-btn {
+      width: 100%;
+      background: rgba(60, 120, 200, 0.7);
+      font-weight: bold;
+    }
+    .drone-btn:hover {
+      background: rgba(80, 140, 220, 0.8);
+    }
+    .drone-btn.active {
+      background: rgba(60, 180, 100, 0.8);
+    }
   </style>
   <script type="importmap">
   {
@@ -151,11 +162,19 @@
       <span class="hud-label">Cam Rot</span>
       <span id="camRotValue" class="hud-value hud-readonly">0°, 0°</span>
     </div>
+    <div class="hud-divider"></div>
     <div class="hud-row">
-      <label class="hud-label" style="cursor:pointer;">
-        <input type="checkbox" id="flyingCam" style="margin-right:6px;" />
-        Flying Camera
-      </label>
+      <span class="hud-label">Drone Height</span>
+      <input id="droneHeightInput" class="hud-input" type="number" value="25" min="5" max="2000" step="5" />
+      <span class="hud-unit">m</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Drone Speed</span>
+      <input id="droneSpeedInput" class="hud-input" type="number" value="50" min="10" max="500" step="10" />
+      <span class="hud-unit">m/s</span>
+    </div>
+    <div class="hud-row">
+      <button id="droneBtn" class="hud-btn drone-btn">LAUNCH DRONE</button>
     </div>
     <div class="hud-divider"></div>
     <div class="hud-row">
@@ -177,6 +196,7 @@
     import { setupRenderer, createLighting } from './lighting.js';
     import { createSkybox, createSun, setupHourControl } from './sun.js';
     import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createProjectileSystem } from './cannon.js';
+    import { createDroneSystem } from './drone.js';
 
     const CONFIG = {
       camera: {
@@ -201,11 +221,16 @@
       floor: {
         size: 4000  // 4k x 4k floor
       },
+      drone: {
+        defaultSpeed: 50,
+        startHeight: 25,
+        startOffset: { x: -3, z: 5 }  // Behind and to the left of cannon
+      },
       sun: {
         hour: 12,
-        skyRadius: 400,
-        sunDistance: 380,
-        sunSize: 30
+        skyRadius: 3000,
+        sunDistance: 2900,
+        sunSize: 200
       }
     };
 
@@ -332,11 +357,35 @@
     }
     applyCameraOrientation();
 
-    // Flying camera mode
-    let flyingCameraEnabled = false;
-    const flyingCamCheckbox = document.getElementById('flyingCam');
-    flyingCamCheckbox.addEventListener('change', (e) => {
-      flyingCameraEnabled = e.target.checked;
+    // ========== DRONE SYSTEM ==========
+    const droneSystem = createDroneSystem(camera, renderer, CONFIG.drone);
+    const droneBtn = document.getElementById('droneBtn');
+    const droneSpeedInput = document.getElementById('droneSpeedInput');
+    const droneHeightInput = document.getElementById('droneHeightInput');
+
+    // Update drone config from UI
+    droneHeightInput.addEventListener('change', () => {
+      droneSystem.setStartHeight(parseFloat(droneHeightInput.value) || 500);
+    });
+
+    droneSpeedInput.addEventListener('change', () => {
+      droneSystem.setSpeed(parseFloat(droneSpeedInput.value) || 50);
+    });
+
+    // Drone toggle button
+    droneBtn.addEventListener('click', () => {
+      const result = droneSystem.toggle(yaw, pitch);
+      if (result.active) {
+        droneBtn.textContent = 'EXIT DRONE';
+        droneBtn.classList.add('active');
+      } else {
+        droneBtn.textContent = 'LAUNCH DRONE';
+        droneBtn.classList.remove('active');
+        // Restore saved yaw/pitch
+        yaw = result.yaw;
+        pitch = result.pitch;
+        applyCameraOrientation();
+      }
     });
 
     // Mouse controls
@@ -369,6 +418,15 @@
       applyCameraOrientation();
     });
 
+    // Mouse wheel for drone speed
+    window.addEventListener('wheel', (event) => {
+      if (!droneSystem.isActive()) return;
+      event.preventDefault();
+      const delta = event.deltaY > 0 ? -10 : 10;
+      const newSpeed = droneSystem.adjustSpeed(delta);
+      droneSpeedInput.value = newSpeed;
+    }, { passive: false });
+
     // Keyboard controls
     const pressedKeys = new Set();
     window.addEventListener('keydown', (event) => {
@@ -399,10 +457,15 @@
       const moveForward = (pressedKeys.has('KeyW') ? 1 : 0) - (pressedKeys.has('KeyS') ? 1 : 0);
       const moveRight = (pressedKeys.has('KeyD') ? 1 : 0) - (pressedKeys.has('KeyA') ? 1 : 0);
 
+      // Determine speed and flying mode based on drone state
+      const isDroneActive = droneSystem.isActive();
+      const currentSpeed = isDroneActive ? droneSystem.getSpeed() : CONFIG.controls.moveSpeed;
+
       if (moveForward !== 0 || moveRight !== 0) {
         camera.getWorldDirection(forwardVector);
 
-        if (!flyingCameraEnabled) {
+        // In drone mode, allow full 3D flight; in FPS mode, constrain to ground
+        if (!isDroneActive) {
           forwardVector.y = 0;
         }
         forwardVector.normalize();
@@ -418,9 +481,12 @@
 
         if (moveVector.lengthSq() > 0) {
           moveVector.normalize();
-          camera.position.addScaledVector(moveVector, CONFIG.controls.moveSpeed * dt);
+          camera.position.addScaledVector(moveVector, currentSpeed * dt);
         }
       }
+
+      // Update drone system
+      droneSystem.update(dt, moveForward, moveRight, yaw);
 
       // Update firing animation
       updateFiringAnimation(firingAnim, howitzerData, dt);
