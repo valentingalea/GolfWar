@@ -121,7 +121,15 @@ export function createMobileControls() {
   // State for thumbsticks
   const state = {
     left: { x: 0, y: 0, active: false, touchId: null },
-    right: { x: 0, y: 0, active: false, touchId: null }
+    right: { x: 0, y: 0, active: false, touchId: null },
+    // Smoothed look values with inertia
+    lookSmooth: { x: 0, y: 0 }
+  };
+
+  // Inertia settings for look
+  const lookInertia = {
+    acceleration: 8.0,  // How fast it responds to input
+    damping: 5.0        // How fast it slows down
   };
 
   // Handle thumbstick touch
@@ -216,9 +224,32 @@ export function createMobileControls() {
     getMovement() {
       return { x: state.left.x, y: state.left.y };
     },
-    // Get look input (-1 to 1)
+    // Get look input with inertia (-1 to 1, smoothed)
     getLook() {
-      return { x: state.right.x, y: state.right.y };
+      return { x: state.lookSmooth.x, y: state.lookSmooth.y };
+    },
+    // Update inertia (call each frame with delta time)
+    update(dt) {
+      // Apply inertia to look controls
+      const targetX = state.right.x;
+      const targetY = state.right.y;
+
+      // Accelerate towards target
+      const diffX = targetX - state.lookSmooth.x;
+      const diffY = targetY - state.lookSmooth.y;
+
+      state.lookSmooth.x += diffX * lookInertia.acceleration * dt;
+      state.lookSmooth.y += diffY * lookInertia.acceleration * dt;
+
+      // Apply damping when stick is released (target is 0)
+      if (!state.right.active) {
+        state.lookSmooth.x *= Math.max(0, 1 - lookInertia.damping * dt);
+        state.lookSmooth.y *= Math.max(0, 1 - lookInertia.damping * dt);
+
+        // Snap to zero when very small
+        if (Math.abs(state.lookSmooth.x) < 0.01) state.lookSmooth.x = 0;
+        if (Math.abs(state.lookSmooth.y) < 0.01) state.lookSmooth.y = 0;
+      }
     },
     // Set fire callback
     setOnFire(callback) {

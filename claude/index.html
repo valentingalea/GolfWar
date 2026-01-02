@@ -533,11 +533,14 @@
 
       // Add mobile thumbstick input
       if (mobileControls) {
+        // Update inertia system
+        mobileControls.update(dt);
+
         const mobileMove = mobileControls.getMovement();
         moveForward += mobileMove.y;
         moveRight += mobileMove.x;
 
-        // Mobile look controls
+        // Mobile look controls (with inertia applied)
         const mobileLook = mobileControls.getLook();
         if (mobileLook.x !== 0 || mobileLook.y !== 0) {
           const mobileLookSpeed = 2.0; // radians per second at full tilt
