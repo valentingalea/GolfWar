@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>3D Scene</title>
   <style>
     html, body {
@@ -107,6 +107,58 @@
     .drone-btn.active {
       background: rgba(60, 180, 100, 0.8);
     }
+
+    /* Mobile styles */
+    @media (max-width: 768px), (pointer: coarse) {
+      #hud {
+        left: 50%;
+        transform: translateX(-50%);
+        top: 10px;
+        padding: 8px 12px;
+        font-size: 11px;
+        min-width: auto;
+        max-width: 90vw;
+        gap: 4px;
+      }
+      .hud-row {
+        gap: 4px;
+      }
+      .hud-input {
+        width: 50px;
+        padding: 3px 4px;
+        font-size: 11px;
+      }
+      .hud-btn {
+        width: 24px;
+        height: 24px;
+        font-size: 12px;
+      }
+      .fire-btn, .drone-btn {
+        padding: 6px;
+        font-size: 11px;
+      }
+      .hud-value {
+        min-width: 40px;
+        font-size: 10px;
+      }
+      .hud-unit {
+        font-size: 9px;
+      }
+      /* Hide some controls on mobile */
+      .hud-row:has(#recoilSpeedInput),
+      .hud-row:has(#outerRecoilSpeedInput),
+      .hud-row:has(#camPosValue),
+      .hud-row:has(#camRotValue) {
+        display: none;
+      }
+    }
+
+    /* Prevent text selection and callouts on mobile */
+    * {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
   </style>
   <script type="importmap">
   {
@@ -198,6 +250,7 @@
     import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createProjectileSystem } from './cannon.js';
     import { createDroneSystem } from './drone.js';
     import { createFirstPersonHands } from './hands.js';
+    import { createMobileControls, isMobileDevice } from './mobile-controls.js';
 
     const CONFIG = {
       camera: {
@@ -377,23 +430,37 @@
       droneSystem.setSpeed(parseFloat(droneSpeedInput.value) || 50);
     });
 
-    // Drone toggle button
-    droneBtn.addEventListener('click', () => {
+    // Drone toggle function (shared between desktop and mobile)
+    function toggleDrone() {
       const result = droneSystem.toggle(yaw, pitch);
       if (result.active) {
         droneBtn.textContent = 'EXIT DRONE';
         droneBtn.classList.add('active');
-        hands.setVisible(false); // Hide hands in drone view
+        hands.setVisible(false);
+        if (mobileControls) mobileControls.setDroneActive(true);
       } else {
         droneBtn.textContent = 'LAUNCH DRONE';
         droneBtn.classList.remove('active');
-        hands.setVisible(true); // Show hands in FPS view
-        // Restore saved yaw/pitch
+        hands.setVisible(true);
+        if (mobileControls) mobileControls.setDroneActive(false);
         yaw = result.yaw;
         pitch = result.pitch;
         applyCameraOrientation();
       }
-    });
+    }
+
+    // Drone toggle button (desktop)
+    droneBtn.addEventListener('click', toggleDrone);
+
+    // ========== MOBILE CONTROLS ==========
+    const mobileControls = createMobileControls();
+    if (mobileControls) {
+      mobileControls.setOnFire(() => projectileSystem.fire());
+      mobileControls.setOnDroneToggle(toggleDrone);
+      // Hide desktop HUD fire/drone buttons on mobile (using virtual ones)
+      document.querySelector('.fire-btn').style.display = 'none';
+      document.querySelector('.drone-btn').style.display = 'none';
+    }
 
     // Mouse controls
     let isDragging = false;
@@ -460,9 +527,30 @@
       requestAnimationFrame(animate);
       const dt = clock.getDelta();
 
-      // Camera movement
-      const moveForward = (pressedKeys.has('KeyW') ? 1 : 0) - (pressedKeys.has('KeyS') ? 1 : 0);
-      const moveRight = (pressedKeys.has('KeyD') ? 1 : 0) - (pressedKeys.has('KeyA') ? 1 : 0);
+      // Camera movement - combine keyboard and mobile inputs
+      let moveForward = (pressedKeys.has('KeyW') ? 1 : 0) - (pressedKeys.has('KeyS') ? 1 : 0);
+      let moveRight = (pressedKeys.has('KeyD') ? 1 : 0) - (pressedKeys.has('KeyA') ? 1 : 0);
+
+      // Add mobile thumbstick input
+      if (mobileControls) {
+        const mobileMove = mobileControls.getMovement();
+        moveForward += mobileMove.y;
+        moveRight += mobileMove.x;
+
+        // Mobile look controls
+        const mobileLook = mobileControls.getLook();
+        if (mobileLook.x !== 0 || mobileLook.y !== 0) {
+          const mobileLookSpeed = 2.0; // radians per second at full tilt
+          yaw -= mobileLook.x * mobileLookSpeed * dt;
+          pitch += mobileLook.y * mobileLookSpeed * dt;
+          pitch = THREE.MathUtils.clamp(pitch, -maxPitch, maxPitch);
+          applyCameraOrientation();
+        }
+      }
+
+      // Clamp combined input
+      moveForward = THREE.MathUtils.clamp(moveForward, -1, 1);
+      moveRight = THREE.MathUtils.clamp(moveRight, -1, 1);
 
       // Determine speed and flying mode based on drone state
       const isDroneActive = droneSystem.isActive();
