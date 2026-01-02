@@ -415,17 +415,28 @@ export function createCannonControls(howitzer) {
   return { getRotation: () => rotationDeg, getElevation: () => elevationDeg };
 }
 
-// Projectile system with smoke trails
+// Projectile system with smoke trails and bounce physics
 export function createProjectileSystem(scene, howitzer, firingAnim) {
   const projectiles = [];
   const smokeParticles = [];
   const gravity = new THREE.Vector3(0, -9.81, 0);
-  const geometry = new THREE.SphereGeometry(0.15, 16, 16);
+  const ballRadius = 0.15;
+  const geometry = new THREE.SphereGeometry(ballRadius, 16, 16);
   const material = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 0.2,
     metalness: 0.1
   });
+
+  // Physics constants
+  const physics = {
+    baseRestitution: 0.75,    // Base bounciness (0-1)
+    friction: 0.3,            // Horizontal velocity loss on bounce
+    rollingFriction: 2.0,     // Deceleration when rolling (m/s²)
+    minBounceVelocity: 0.5,   // Below this, stop bouncing
+    minRollVelocity: 0.1,     // Below this, stop completely
+    floorY: 0                 // Floor height
+  };
 
   // Smoke trail settings
   const smokeTexture = createSmokeTexture();
@@ -493,7 +504,9 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
       mesh: projectile,
       velocity: direction.multiplyScalar(velocity),
       mass: mass,
-      smokeTimer: 0
+      smokeTimer: 0,
+      state: 'flying',      // flying, rolling, stopped
+      bounceCount: 0
     });
 
     firingAnim.active = true;
@@ -502,21 +515,98 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
   }
 
   function update(dt) {
-    // Update projectiles and spawn smoke
+    // Update projectiles with physics
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const proj = projectiles[i];
-      proj.velocity.addScaledVector(gravity, dt);
-      proj.mesh.position.addScaledVector(proj.velocity, dt);
+      const floorHeight = physics.floorY + ballRadius;
 
-      // Spawn smoke particles
-      proj.smokeTimer += dt;
-      if (proj.smokeTimer >= smokeConfig.spawnRate) {
-        proj.smokeTimer = 0;
-        smokeParticles.push(createSmokeParticle(proj.mesh.position));
+      if (proj.state === 'stopped') {
+        // Ball is at rest, do nothing
+        continue;
       }
 
-      // Remove projectile if out of bounds
-      if (proj.mesh.position.y < 0 || proj.mesh.position.length() > 500) {
+      if (proj.state === 'flying' || proj.state === 'bouncing') {
+        // Apply gravity
+        proj.velocity.addScaledVector(gravity, dt);
+        proj.mesh.position.addScaledVector(proj.velocity, dt);
+
+        // Spawn smoke particles (only while in the air and moving fast)
+        if (proj.velocity.length() > 5) {
+          proj.smokeTimer += dt;
+          if (proj.smokeTimer >= smokeConfig.spawnRate) {
+            proj.smokeTimer = 0;
+            smokeParticles.push(createSmokeParticle(proj.mesh.position));
+          }
+        }
+
+        // Check floor collision
+        if (proj.mesh.position.y <= floorHeight) {
+          proj.mesh.position.y = floorHeight;
+
+          // Calculate impact velocity
+          const impactSpeed = Math.abs(proj.velocity.y);
+
+          if (impactSpeed < physics.minBounceVelocity) {
+            // Too slow to bounce, start rolling
+            proj.state = 'rolling';
+            proj.velocity.y = 0;
+          } else {
+            // Bounce!
+            proj.state = 'bouncing';
+            proj.bounceCount++;
+
+            // Calculate restitution based on mass and impact speed
+            // Heavier balls retain more energy, very fast impacts lose more
+            const massRatio = Math.min(proj.mass / 20, 1.5); // Normalize around 20kg
+            const speedFactor = Math.max(0.8, 1 - impactSpeed * 0.005); // Lose energy at high speeds
+            const restitution = physics.baseRestitution * massRatio * speedFactor;
+
+            // Reflect vertical velocity with energy loss
+            proj.velocity.y = -proj.velocity.y * Math.min(restitution, 0.95);
+
+            // Apply friction to horizontal velocity
+            proj.velocity.x *= (1 - physics.friction);
+            proj.velocity.z *= (1 - physics.friction);
+          }
+        }
+      }
+
+      if (proj.state === 'rolling') {
+        // Ball is rolling on the ground
+        proj.mesh.position.y = floorHeight;
+        proj.velocity.y = 0;
+
+        // Apply rolling friction
+        const horizontalSpeed = Math.sqrt(proj.velocity.x ** 2 + proj.velocity.z ** 2);
+
+        if (horizontalSpeed < physics.minRollVelocity) {
+          // Ball stopped
+          proj.state = 'stopped';
+          proj.velocity.set(0, 0, 0);
+        } else {
+          // Decelerate due to rolling friction
+          const friction = physics.rollingFriction * dt;
+          const newSpeed = Math.max(0, horizontalSpeed - friction);
+          const scale = newSpeed / horizontalSpeed;
+          proj.velocity.x *= scale;
+          proj.velocity.z *= scale;
+
+          // Move the ball
+          proj.mesh.position.addScaledVector(proj.velocity, dt);
+
+          // Rotate the ball based on movement (visual effect)
+          const rollDistance = horizontalSpeed * dt;
+          const rollAngle = rollDistance / ballRadius;
+          // Rotate around the axis perpendicular to velocity
+          const rollAxis = new THREE.Vector3(-proj.velocity.z, 0, proj.velocity.x).normalize();
+          if (rollAxis.length() > 0) {
+            proj.mesh.rotateOnWorldAxis(rollAxis, rollAngle);
+          }
+        }
+      }
+
+      // Remove projectile if too far out of bounds
+      if (proj.mesh.position.length() > 1000) {
         scene.remove(proj.mesh);
         projectiles.splice(i, 1);
       }
