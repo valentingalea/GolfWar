@@ -191,6 +191,14 @@ export function createFirstPersonHands(camera) {
   rightHand.rotation.set(defaultRotX, 0, -defaultRotZ);
   handsRig.add(rightHand);
 
+  // Held object slot - positioned between hands, slightly forward
+  const heldObjectSlot = new THREE.Group();
+  heldObjectSlot.position.set(0, -0.12, -0.32);
+  handsRig.add(heldObjectSlot);
+
+  // Track current held object
+  let currentHeldObject = null;
+
   // Attach to camera
   camera.add(handsRig);
 
@@ -198,8 +206,23 @@ export function createFirstPersonHands(camera) {
     rig: handsRig,
     leftHand,
     rightHand,
+    heldObjectSlot,
     setVisible(visible) {
       handsRig.visible = visible;
+    },
+    setHeldObject(object) {
+      // Remove current object
+      if (currentHeldObject) {
+        heldObjectSlot.remove(currentHeldObject);
+      }
+      // Add new object
+      currentHeldObject = object;
+      if (object) {
+        heldObjectSlot.add(object);
+      }
+    },
+    getHeldObject() {
+      return currentHeldObject;
     }
   };
 }

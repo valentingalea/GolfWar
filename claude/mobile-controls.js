@@ -66,23 +66,21 @@ export function createMobileControls() {
   const rightStick = createThumbstick('right-stick', 'right');
   mobileUI.appendChild(rightStick.container);
 
-  // Fire button
-  const fireBtn = document.createElement('div');
-  fireBtn.id = 'mobile-fire-btn';
-  fireBtn.textContent = 'FIRE';
-  fireBtn.style.cssText = `
+  // Stage cycling - previous stage button (left arrow)
+  const prevStageBtn = document.createElement('div');
+  prevStageBtn.id = 'mobile-prev-stage';
+  prevStageBtn.innerHTML = '&#9664;'; // Left triangle
+  prevStageBtn.style.cssText = `
     position: fixed;
     bottom: 170px;
-    right: 50px;
-    width: 80px;
-    height: 80px;
+    left: 60px;
+    width: 50px;
+    height: 50px;
     border-radius: 50%;
-    background: rgba(200, 60, 60, 0.7);
-    border: 2px solid rgba(255, 100, 100, 0.8);
+    background: rgba(100, 100, 100, 0.7);
+    border: 2px solid rgba(255, 255, 255, 0.5);
     color: white;
-    font-family: monospace;
-    font-weight: bold;
-    font-size: 14px;
+    font-size: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -90,21 +88,46 @@ export function createMobileControls() {
     z-index: 1000;
     user-select: none;
   `;
-  mobileUI.appendChild(fireBtn);
+  mobileUI.appendChild(prevStageBtn);
 
-  // Drone toggle button
-  const droneBtn = document.createElement('div');
-  droneBtn.id = 'mobile-drone-btn';
-  droneBtn.textContent = 'DRONE';
-  droneBtn.style.cssText = `
+  // Stage cycling - next stage button (right arrow)
+  const nextStageBtn = document.createElement('div');
+  nextStageBtn.id = 'mobile-next-stage';
+  nextStageBtn.innerHTML = '&#9654;'; // Right triangle
+  nextStageBtn.style.cssText = `
     position: fixed;
     bottom: 170px;
-    left: 50px;
-    width: 80px;
-    height: 80px;
+    right: 60px;
+    width: 50px;
+    height: 50px;
     border-radius: 50%;
-    background: rgba(60, 120, 200, 0.7);
-    border: 2px solid rgba(100, 150, 255, 0.8);
+    background: rgba(100, 100, 100, 0.7);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    color: white;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+    z-index: 1000;
+    user-select: none;
+  `;
+  mobileUI.appendChild(nextStageBtn);
+
+  // Action button (green, centered)
+  const actionBtn = document.createElement('div');
+  actionBtn.id = 'mobile-action-btn';
+  actionBtn.textContent = 'ACTION';
+  actionBtn.style.cssText = `
+    position: fixed;
+    bottom: 165px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90px;
+    height: 60px;
+    border-radius: 12px;
+    background: rgba(60, 180, 60, 0.7);
+    border: 2px solid rgba(100, 220, 100, 0.8);
     color: white;
     font-family: monospace;
     font-weight: bold;
@@ -116,7 +139,28 @@ export function createMobileControls() {
     z-index: 1000;
     user-select: none;
   `;
-  mobileUI.appendChild(droneBtn);
+  mobileUI.appendChild(actionBtn);
+
+  // Stage name display
+  const stageDisplay = document.createElement('div');
+  stageDisplay.id = 'mobile-stage-display';
+  stageDisplay.textContent = 'Idle';
+  stageDisplay.style.cssText = `
+    position: fixed;
+    bottom: 235px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 12px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    font-family: monospace;
+    font-size: 11px;
+    z-index: 1000;
+    user-select: none;
+  `;
+  mobileUI.appendChild(stageDisplay);
 
   // State for thumbsticks
   const state = {
@@ -195,29 +239,40 @@ export function createMobileControls() {
   handleStickTouch(leftStick.container, leftStick.knob, state.left);
   handleStickTouch(rightStick.container, rightStick.knob, state.right);
 
-  // Fire button handler
-  let onFire = null;
-  fireBtn.addEventListener('touchstart', (e) => {
+  // Stage cycling callbacks
+  let onPrevStage = null;
+  let onNextStage = null;
+  let onAction = null;
+
+  // Previous stage button handler
+  prevStageBtn.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    fireBtn.style.background = 'rgba(255, 100, 100, 0.9)';
-    if (onFire) onFire();
+    prevStageBtn.style.background = 'rgba(150, 150, 150, 0.9)';
+    if (onPrevStage) onPrevStage();
   }, { passive: false });
-  fireBtn.addEventListener('touchend', () => {
-    fireBtn.style.background = 'rgba(200, 60, 60, 0.7)';
+  prevStageBtn.addEventListener('touchend', () => {
+    prevStageBtn.style.background = 'rgba(100, 100, 100, 0.7)';
   });
 
-  // Drone button handler
-  let onDroneToggle = null;
-  let droneActive = false;
-  droneBtn.addEventListener('touchstart', (e) => {
+  // Next stage button handler
+  nextStageBtn.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    droneActive = !droneActive;
-    droneBtn.style.background = droneActive
-      ? 'rgba(60, 180, 100, 0.8)'
-      : 'rgba(60, 120, 200, 0.7)';
-    droneBtn.textContent = droneActive ? 'EXIT' : 'DRONE';
-    if (onDroneToggle) onDroneToggle();
+    nextStageBtn.style.background = 'rgba(150, 150, 150, 0.9)';
+    if (onNextStage) onNextStage();
   }, { passive: false });
+  nextStageBtn.addEventListener('touchend', () => {
+    nextStageBtn.style.background = 'rgba(100, 100, 100, 0.7)';
+  });
+
+  // Action button handler
+  actionBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    actionBtn.style.background = 'rgba(80, 220, 80, 0.9)';
+    if (onAction) onAction();
+  }, { passive: false });
+  actionBtn.addEventListener('touchend', () => {
+    actionBtn.style.background = 'rgba(60, 180, 60, 0.7)';
+  });
 
   return {
     // Get movement input (-1 to 1)
@@ -251,21 +306,27 @@ export function createMobileControls() {
         if (Math.abs(state.lookSmooth.y) < 0.01) state.lookSmooth.y = 0;
       }
     },
-    // Set fire callback
-    setOnFire(callback) {
-      onFire = callback;
+    // Set stage cycling callbacks
+    setOnPrevStage(callback) {
+      onPrevStage = callback;
     },
-    // Set drone toggle callback
-    setOnDroneToggle(callback) {
-      onDroneToggle = callback;
+    setOnNextStage(callback) {
+      onNextStage = callback;
     },
-    // Update drone button state externally
-    setDroneActive(active) {
-      droneActive = active;
-      droneBtn.style.background = active
-        ? 'rgba(60, 180, 100, 0.8)'
-        : 'rgba(60, 120, 200, 0.7)';
-      droneBtn.textContent = active ? 'EXIT' : 'DRONE';
+    setOnAction(callback) {
+      onAction = callback;
+    },
+    // Show/hide stage cycling buttons (hidden in Drone View)
+    setStageCyclingVisible(visible) {
+      const display = visible ? 'flex' : 'none';
+      prevStageBtn.style.display = display;
+      nextStageBtn.style.display = display;
+      actionBtn.style.display = visible ? 'flex' : 'none';
+      stageDisplay.style.display = visible ? 'block' : 'none';
+    },
+    // Update stage display
+    setStageDisplay(stageName) {
+      stageDisplay.textContent = stageName;
     },
     // Show/hide mobile UI
     setVisible(visible) {

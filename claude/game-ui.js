@@ -1,0 +1,222 @@
+// Game UI - center screen overlays for stage-specific controls
+
+// Create Game UI system
+export function createGameUI() {
+  // Create overlay container (centered on screen)
+  const overlay = document.createElement('div');
+  overlay.id = 'game-ui-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 20px 30px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.85);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    font-family: monospace;
+    font-size: 14px;
+    display: none;
+    z-index: 500;
+    min-width: 220px;
+  `;
+  document.body.appendChild(overlay);
+
+  // Projectile controls panel
+  const projectilePanel = document.createElement('div');
+  projectilePanel.id = 'game-ui-projectile';
+  projectilePanel.innerHTML = `
+    <h3 style="margin: 0 0 16px 0; text-align: center; color: #8cf;">Projectile Setup</h3>
+    <div class="game-ui-row">
+      <span class="game-ui-label">Velocity</span>
+      <input id="gameVelocityInput" class="game-ui-input" type="number" value="20" min="10" max="200" step="5" />
+      <span class="game-ui-unit">m/s</span>
+    </div>
+    <div class="game-ui-row">
+      <span class="game-ui-label">Mass</span>
+      <input id="gameMassInput" class="game-ui-input" type="number" value="10" min="1" max="100" step="1" />
+      <span class="game-ui-unit">kg</span>
+    </div>
+    <div class="game-ui-hint">Press F to close</div>
+  `;
+  projectilePanel.style.display = 'none';
+  overlay.appendChild(projectilePanel);
+
+  // Cannon controls panel
+  const cannonPanel = document.createElement('div');
+  cannonPanel.id = 'game-ui-cannon';
+  cannonPanel.innerHTML = `
+    <h3 style="margin: 0 0 16px 0; text-align: center; color: #fc8;">Cannon Adjust</h3>
+    <div class="game-ui-row">
+      <span class="game-ui-label">Rotation</span>
+      <span id="gameRotationValue" class="game-ui-value">0°</span>
+      <button id="gameRotLeft" class="game-ui-btn">&lt;</button>
+      <button id="gameRotRight" class="game-ui-btn">&gt;</button>
+    </div>
+    <div class="game-ui-row">
+      <span class="game-ui-label">Elevation</span>
+      <span id="gameElevationValue" class="game-ui-value">40°</span>
+      <button id="gameElevDown" class="game-ui-btn">-</button>
+      <button id="gameElevUp" class="game-ui-btn">+</button>
+    </div>
+    <div class="game-ui-hint">Press F to close</div>
+  `;
+  cannonPanel.style.display = 'none';
+  overlay.appendChild(cannonPanel);
+
+  // Add styles for game UI elements
+  const style = document.createElement('style');
+  style.textContent = `
+    .game-ui-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .game-ui-label {
+      flex: 1;
+      color: #ccc;
+    }
+    .game-ui-value {
+      min-width: 50px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .game-ui-input {
+      width: 70px;
+      padding: 6px 8px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 14px;
+    }
+    .game-ui-input:focus {
+      outline: none;
+      border-color: rgba(255, 255, 255, 0.6);
+    }
+    .game-ui-unit {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      min-width: 30px;
+    }
+    .game-ui-btn {
+      width: 32px;
+      height: 32px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .game-ui-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+    .game-ui-btn:active {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    .game-ui-hint {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.4);
+    }
+  `;
+  document.head.appendChild(style);
+
+  let currentPanel = null;
+  let onHideCallback = null;
+
+  // Click outside to close
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      hide();
+    }
+  });
+
+  function show(panelType) {
+    overlay.style.display = 'block';
+    projectilePanel.style.display = panelType === 'projectile' ? 'block' : 'none';
+    cannonPanel.style.display = panelType === 'cannon' ? 'block' : 'none';
+    currentPanel = panelType;
+  }
+
+  function hide() {
+    if (overlay.style.display !== 'none') {
+      overlay.style.display = 'none';
+      currentPanel = null;
+      if (onHideCallback) {
+        onHideCallback();
+      }
+    }
+  }
+
+  function isVisible() {
+    return overlay.style.display !== 'none';
+  }
+
+  return {
+    show,
+    hide,
+    isVisible,
+    getCurrentPanel: () => currentPanel,
+    onHide(callback) {
+      onHideCallback = callback;
+    },
+    // Sync projectile values with debug UI
+    syncProjectileValues(debugVelocityEl, debugMassEl) {
+      const gameVelocity = document.getElementById('gameVelocityInput');
+      const gameMass = document.getElementById('gameMassInput');
+
+      // Sync from debug to game UI on show
+      gameVelocity.value = debugVelocityEl.value;
+      gameMass.value = debugMassEl.value;
+
+      // Sync game UI changes to debug UI
+      gameVelocity.addEventListener('input', () => {
+        debugVelocityEl.value = gameVelocity.value;
+      });
+      gameMass.addEventListener('input', () => {
+        debugMassEl.value = gameMass.value;
+      });
+
+      // Sync debug UI changes to game UI
+      debugVelocityEl.addEventListener('input', () => {
+        gameVelocity.value = debugVelocityEl.value;
+      });
+      debugMassEl.addEventListener('input', () => {
+        gameMass.value = debugMassEl.value;
+      });
+    },
+    // Setup cannon controls with callbacks
+    setupCannonControls(onRotLeft, onRotRight, onElevUp, onElevDown, updateDisplay) {
+      document.getElementById('gameRotLeft').addEventListener('click', () => {
+        onRotLeft();
+        updateDisplay();
+      });
+      document.getElementById('gameRotRight').addEventListener('click', () => {
+        onRotRight();
+        updateDisplay();
+      });
+      document.getElementById('gameElevUp').addEventListener('click', () => {
+        onElevUp();
+        updateDisplay();
+      });
+      document.getElementById('gameElevDown').addEventListener('click', () => {
+        onElevDown();
+        updateDisplay();
+      });
+    },
+    // Update cannon display values
+    updateCannonDisplay(rotation, elevation) {
+      document.getElementById('gameRotationValue').textContent = `${rotation}°`;
+      document.getElementById('gameElevationValue').textContent = `${elevation}°`;
+    }
+  };
+}

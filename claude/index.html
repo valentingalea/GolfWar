@@ -74,17 +74,6 @@
       font-size: 11px;
       color: rgba(255,255,255,0.6);
     }
-    .fire-btn {
-      width: 100%;
-      background: rgba(200, 60, 60, 0.7);
-      font-weight: bold;
-    }
-    .fire-btn:hover {
-      background: rgba(220, 80, 80, 0.8);
-    }
-    .fire-btn:active {
-      background: rgba(255, 100, 100, 0.9);
-    }
     .hud-divider {
       height: 1px;
       background: rgba(255,255,255,0.2);
@@ -96,16 +85,8 @@
       flex: 1;
       text-align: right;
     }
-    .drone-btn {
-      width: 100%;
-      background: rgba(60, 120, 200, 0.7);
-      font-weight: bold;
-    }
-    .drone-btn:hover {
-      background: rgba(80, 140, 220, 0.8);
-    }
-    .drone-btn.active {
-      background: rgba(60, 180, 100, 0.8);
+    .debug-section {
+      /* Stage-specific debug UI sections */
     }
 
     /* Mobile styles */
@@ -133,10 +114,6 @@
         height: 24px;
         font-size: 12px;
       }
-      .fire-btn, .drone-btn {
-        padding: 6px;
-        font-size: 11px;
-      }
       .hud-value {
         min-width: 40px;
         font-size: 10px;
@@ -144,9 +121,7 @@
       .hud-unit {
         font-size: 9px;
       }
-      /* Hide some controls on mobile */
-      .hud-row:has(#recoilSpeedInput),
-      .hud-row:has(#outerRecoilSpeedInput),
+      /* Hide verbose debug info on mobile */
       .hud-row:has(#camPosValue),
       .hud-row:has(#camRotValue) {
         display: none;
@@ -170,76 +145,70 @@
 </head>
 <body>
   <div id="hud">
-    <div class="hud-row">
-      <span class="hud-label">Rotation</span>
-      <span id="rotationValue" class="hud-value">0°</span>
-      <button id="rotLeft" class="hud-btn">&lt;</button>
-      <button id="rotRight" class="hud-btn">&gt;</button>
+    <!-- Shared Debug UI (always visible) -->
+    <div id="debug-shared">
+      <div class="hud-row">
+        <span class="hud-label">Stage</span>
+        <span id="stageValue" class="hud-value" style="color: #8cf;">Idle</span>
+      </div>
+      <div class="hud-divider"></div>
+      <div class="hud-row">
+        <span class="hud-label">Cam Pos</span>
+        <span id="camPosValue" class="hud-value hud-readonly">0, 0, 0</span>
+      </div>
+      <div class="hud-row">
+        <span class="hud-label">Cam Rot</span>
+        <span id="camRotValue" class="hud-value hud-readonly">0°, 0°</span>
+      </div>
+      <div class="hud-divider"></div>
+      <div class="hud-row">
+        <span class="hud-label">Hour</span>
+        <input id="hourInput" class="hud-input" type="number" value="12" min="0" max="24" step="0.5" />
+        <span id="hourDisplay" class="hud-unit">12:00</span>
+      </div>
+      <div class="hud-row">
+        <label class="hud-label" style="cursor:pointer;">
+          <input type="checkbox" id="lockLighting" style="margin-right:6px;" checked />
+          Lock Lighting
+        </label>
+      </div>
     </div>
-    <div class="hud-row">
-      <span class="hud-label">Elevation</span>
-      <span id="elevationValue" class="hud-value">40°</span>
-      <button id="elevDown" class="hud-btn">-</button>
-      <button id="elevUp" class="hud-btn">+</button>
+
+    <!-- Stage-specific: Drone settings (Idle stage) -->
+    <div id="debug-drone" class="debug-section">
+      <div class="hud-divider"></div>
+      <div class="hud-row">
+        <span class="hud-label">Drone Height</span>
+        <input id="droneHeightInput" class="hud-input" type="number" value="25" min="5" max="2000" step="5" />
+        <span class="hud-unit">m</span>
+      </div>
+      <div class="hud-row">
+        <span class="hud-label">Drone Speed</span>
+        <input id="droneSpeedInput" class="hud-input" type="number" value="50" min="10" max="500" step="10" />
+        <span class="hud-unit">m/s</span>
+      </div>
     </div>
-    <div class="hud-row">
-      <span class="hud-label">Velocity</span>
-      <input id="velocityInput" class="hud-input" type="number" value="20" min="10" max="200" step="5" />
-      <span class="hud-unit">m/s</span>
+
+    <!-- Stage-specific: Recoil settings (Fire Cannon stage) -->
+    <div id="debug-recoil" class="debug-section" style="display: none;">
+      <div class="hud-divider"></div>
+      <div class="hud-row">
+        <span class="hud-label">Inner Recoil</span>
+        <input id="recoilSpeedInput" class="hud-input" type="number" value="2" min="1" max="20" step="1" />
+        <span class="hud-unit"></span>
+      </div>
+      <div class="hud-row">
+        <span class="hud-label">Outer Recoil</span>
+        <input id="outerRecoilSpeedInput" class="hud-input" type="number" value="4" min="1" max="20" step="1" />
+        <span class="hud-unit"></span>
+      </div>
     </div>
-    <div class="hud-row">
-      <span class="hud-label">Mass</span>
-      <input id="massInput" class="hud-input" type="number" value="10" min="1" max="100" step="1" />
-      <span class="hud-unit">kg</span>
-    </div>
-    <div class="hud-row">
-      <span class="hud-label">Inner Recoil</span>
-      <input id="recoilSpeedInput" class="hud-input" type="number" value="2" min="1" max="20" step="1" />
-      <span class="hud-unit"></span>
-    </div>
-    <div class="hud-row">
-      <span class="hud-label">Outer Recoil</span>
-      <input id="outerRecoilSpeedInput" class="hud-input" type="number" value="4" min="1" max="20" step="1" />
-      <span class="hud-unit"></span>
-    </div>
-    <div class="hud-row">
-      <button id="fireBtn" class="hud-btn fire-btn">FIRE</button>
-    </div>
-    <div class="hud-divider"></div>
-    <div class="hud-row">
-      <span class="hud-label">Cam Pos</span>
-      <span id="camPosValue" class="hud-value hud-readonly">0, 0, 0</span>
-    </div>
-    <div class="hud-row">
-      <span class="hud-label">Cam Rot</span>
-      <span id="camRotValue" class="hud-value hud-readonly">0°, 0°</span>
-    </div>
-    <div class="hud-divider"></div>
-    <div class="hud-row">
-      <span class="hud-label">Drone Height</span>
-      <input id="droneHeightInput" class="hud-input" type="number" value="25" min="5" max="2000" step="5" />
-      <span class="hud-unit">m</span>
-    </div>
-    <div class="hud-row">
-      <span class="hud-label">Drone Speed</span>
-      <input id="droneSpeedInput" class="hud-input" type="number" value="50" min="10" max="500" step="10" />
-      <span class="hud-unit">m/s</span>
-    </div>
-    <div class="hud-row">
-      <button id="droneBtn" class="hud-btn drone-btn">LAUNCH DRONE</button>
-    </div>
-    <div class="hud-divider"></div>
-    <div class="hud-row">
-      <span class="hud-label">Hour</span>
-      <input id="hourInput" class="hud-input" type="number" value="12" min="0" max="24" step="0.5" />
-      <span id="hourDisplay" class="hud-unit">12:00</span>
-    </div>
-    <div class="hud-row">
-      <label class="hud-label" style="cursor:pointer;">
-        <input type="checkbox" id="lockLighting" style="margin-right:6px;" checked />
-        Lock Lighting
-      </label>
-    </div>
+
+    <!-- Hidden inputs used by cannon.js (values synced via Game UI) -->
+    <input id="velocityInput" type="hidden" value="20" />
+    <input id="massInput" type="hidden" value="10" />
+    <span id="rotationValue" style="display:none;">0°</span>
+    <span id="elevationValue" style="display:none;">40°</span>
   </div>
   <script type="module">
     import * as THREE from 'three';
@@ -251,6 +220,9 @@
     import { createDroneSystem } from './drone.js';
     import { createFirstPersonHands } from './hands.js';
     import { createMobileControls, isMobileDevice } from './mobile-controls.js';
+    import { createGameState } from './game-state.js';
+    import { createHandObjects } from './hand-objects.js';
+    import { createGameUI } from './game-ui.js';
 
     const CONFIG = {
       camera: {
@@ -310,6 +282,12 @@
 
     // ========== FIRST PERSON HANDS ==========
     const hands = createFirstPersonHands(camera);
+
+    // ========== HAND OBJECTS ==========
+    const handObjects = createHandObjects();
+
+    // ========== GAME UI ==========
+    const gameUI = createGameUI();
 
     // ========== LIGHTING ==========
     const lighting = createLighting(scene);
@@ -401,9 +379,6 @@
     const cannonControls = createCannonControls(howitzerData);
     const projectileSystem = createProjectileSystem(scene, howitzerData, firingAnim);
 
-    // Connect fire button
-    document.getElementById('fireBtn').addEventListener('click', projectileSystem.fire);
-
     // ========== CAMERA CONTROLS ==========
     let yaw = THREE.MathUtils.degToRad(CONFIG.camera.initialYawDeg);
     let pitch = THREE.MathUtils.degToRad(CONFIG.camera.initialPitchDeg);
@@ -417,7 +392,6 @@
 
     // ========== DRONE SYSTEM ==========
     const droneSystem = createDroneSystem(camera, renderer, CONFIG.drone);
-    const droneBtn = document.getElementById('droneBtn');
     const droneSpeedInput = document.getElementById('droneSpeedInput');
     const droneHeightInput = document.getElementById('droneHeightInput');
 
@@ -430,36 +404,119 @@
       droneSystem.setSpeed(parseFloat(droneSpeedInput.value) || 50);
     });
 
-    // Drone toggle function (shared between desktop and mobile)
-    function toggleDrone() {
-      const result = droneSystem.toggle(yaw, pitch);
-      if (result.active) {
-        droneBtn.textContent = 'EXIT DRONE';
-        droneBtn.classList.add('active');
-        hands.setVisible(false);
-        if (mobileControls) mobileControls.setDroneActive(true);
-      } else {
-        droneBtn.textContent = 'LAUNCH DRONE';
-        droneBtn.classList.remove('active');
-        hands.setVisible(true);
-        if (mobileControls) mobileControls.setDroneActive(false);
-        yaw = result.yaw;
-        pitch = result.pitch;
-        applyCameraOrientation();
+    // ========== MOBILE CONTROLS ==========
+    const mobileControls = createMobileControls();
+
+    // ========== DEBUG UI SECTIONS ==========
+    const debugSections = {
+      drone: document.getElementById('debug-drone'),
+      recoil: document.getElementById('debug-recoil')
+    };
+    const stageValueEl = document.getElementById('stageValue');
+
+    function showDebugSection(sectionName) {
+      // Hide all sections
+      Object.values(debugSections).forEach(el => {
+        if (el) el.style.display = 'none';
+      });
+      // Show requested section
+      if (sectionName && debugSections[sectionName]) {
+        debugSections[sectionName].style.display = 'block';
       }
     }
 
-    // Drone toggle button (desktop)
-    droneBtn.addEventListener('click', toggleDrone);
+    // ========== GAME STATE MACHINE ==========
+    const gameState = createGameState({
+      onStageEnter: (stage) => {
+        // Update stage display
+        stageValueEl.textContent = stage.name;
+        if (mobileControls) {
+          mobileControls.setStageDisplay(stage.name);
+        }
 
-    // ========== MOBILE CONTROLS ==========
-    const mobileControls = createMobileControls();
+        // Update held object
+        if (stage.handObject) {
+          hands.setHeldObject(handObjects[stage.handObject]);
+        } else {
+          hands.setHeldObject(null);
+        }
+
+        // Update debug UI section
+        showDebugSection(stage.debugSection);
+
+        // Handle special stages
+        if (stage.id === 'drone-view') {
+          const result = droneSystem.toggle(yaw, pitch);
+          hands.setVisible(false);
+          if (mobileControls) {
+            mobileControls.setStageCyclingVisible(false);
+          }
+        }
+      },
+
+      onStageExit: (stage) => {
+        // Hide any game UI
+        gameUI.hide();
+
+        if (stage.id === 'drone-view') {
+          const result = droneSystem.toggle(yaw, pitch);
+          if (result && !result.active) {
+            yaw = result.yaw;
+            pitch = result.pitch;
+            applyCameraOrientation();
+          }
+          hands.setVisible(true);
+          if (mobileControls) {
+            mobileControls.setStageCyclingVisible(true);
+          }
+        }
+      },
+
+      setGameUIVisible: (panelType, visible) => {
+        if (visible) {
+          gameUI.show(panelType);
+          // Sync cannon display values when showing cannon panel
+          if (panelType === 'cannon') {
+            gameUI.updateCannonDisplay(cannonControls.getRotation(), cannonControls.getElevation());
+          }
+        } else {
+          gameUI.hide();
+        }
+      },
+
+      fireCannon: () => {
+        projectileSystem.fire();
+      }
+    });
+
+    // Set initial held object (Idle stage starts with drone)
+    hands.setHeldObject(handObjects['drone']);
+
+    // Setup Game UI callbacks
+    gameUI.onHide(() => {
+      gameState.hideGameUI();
+    });
+
+    // Sync Game UI with cannon controls
+    gameUI.setupCannonControls(
+      () => cannonControls.adjustRotation(-5),
+      () => cannonControls.adjustRotation(5),
+      () => cannonControls.adjustElevation(5),
+      () => cannonControls.adjustElevation(-5),
+      () => gameUI.updateCannonDisplay(cannonControls.getRotation(), cannonControls.getElevation())
+    );
+
+    // Sync projectile values
+    gameUI.syncProjectileValues(
+      document.getElementById('velocityInput'),
+      document.getElementById('massInput')
+    );
+
+    // ========== MOBILE CONTROLS CALLBACKS ==========
     if (mobileControls) {
-      mobileControls.setOnFire(() => projectileSystem.fire());
-      mobileControls.setOnDroneToggle(toggleDrone);
-      // Hide desktop HUD fire/drone buttons on mobile (using virtual ones)
-      document.querySelector('.fire-btn').style.display = 'none';
-      document.querySelector('.drone-btn').style.display = 'none';
+      mobileControls.setOnPrevStage(() => gameState.cyclePrev());
+      mobileControls.setOnNextStage(() => gameState.cycleNext());
+      mobileControls.setOnAction(() => gameState.triggerAction());
     }
 
     // Mouse controls
@@ -505,6 +562,27 @@
     const pressedKeys = new Set();
     window.addEventListener('keydown', (event) => {
       pressedKeys.add(event.code);
+
+      // Stage cycling
+      if (event.code === 'KeyQ') {
+        gameState.cyclePrev();
+      }
+      if (event.code === 'KeyE') {
+        gameState.cycleNext();
+      }
+
+      // Direct stage access (1-6)
+      if (event.code === 'Digit1') gameState.goToStage(0);
+      if (event.code === 'Digit2') gameState.goToStage(1);
+      if (event.code === 'Digit3') gameState.goToStage(2);
+      if (event.code === 'Digit4') gameState.goToStage(3);
+      if (event.code === 'Digit5') gameState.goToStage(4); // Blocked by state machine
+      if (event.code === 'Digit6') gameState.goToStage(5);
+
+      // Action trigger
+      if (event.code === 'KeyF') {
+        gameState.triggerAction();
+      }
     });
     window.addEventListener('keyup', (event) => {
       pressedKeys.delete(event.code);

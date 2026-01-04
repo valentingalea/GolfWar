@@ -383,36 +383,36 @@ export function createCannonControls(howitzer) {
 
   function updateRotation() {
     howitzer.turretGroup.rotation.y = THREE.MathUtils.degToRad(rotationDeg);
-    rotationValueEl.textContent = `${rotationDeg}°`;
+    if (rotationValueEl) rotationValueEl.textContent = `${rotationDeg}°`;
   }
 
   function updateElevation() {
     elevationDeg = THREE.MathUtils.clamp(elevationDeg, 0, 80);
     howitzer.elevatingGroup.rotation.x = -THREE.MathUtils.degToRad(elevationDeg);
-    elevationValueEl.textContent = `${elevationDeg}°`;
+    if (elevationValueEl) elevationValueEl.textContent = `${elevationDeg}°`;
+  }
+
+  function adjustRotation(delta) {
+    rotationDeg += delta;
+    updateRotation();
+    return rotationDeg;
+  }
+
+  function adjustElevation(delta) {
+    elevationDeg += delta;
+    updateElevation();
+    return elevationDeg;
   }
 
   updateRotation();
   updateElevation();
 
-  document.getElementById('rotLeft').addEventListener('click', () => {
-    rotationDeg -= 5;
-    updateRotation();
-  });
-  document.getElementById('rotRight').addEventListener('click', () => {
-    rotationDeg += 5;
-    updateRotation();
-  });
-  document.getElementById('elevUp').addEventListener('click', () => {
-    elevationDeg += 5;
-    updateElevation();
-  });
-  document.getElementById('elevDown').addEventListener('click', () => {
-    elevationDeg -= 5;
-    updateElevation();
-  });
-
-  return { getRotation: () => rotationDeg, getElevation: () => elevationDeg };
+  return {
+    getRotation: () => rotationDeg,
+    getElevation: () => elevationDeg,
+    adjustRotation,
+    adjustElevation
+  };
 }
 
 // Projectile system with smoke trails and bounce physics
