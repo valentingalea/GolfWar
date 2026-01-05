@@ -221,7 +221,7 @@
     import { createFirstPersonHands } from './hands.js';
     import { createMobileControls, isMobileDevice } from './mobile-controls.js';
     import { createGameState } from './game-state.js';
-    import { createHandObjects } from './hand-objects.js';
+    import { createHandObjects, updateHandObjectAnimations, triggerButtonPress } from './hand-objects.js';
     import { createGameUI } from './game-ui.js';
 
     const CONFIG = {
@@ -485,6 +485,7 @@
       },
 
       fireCannon: () => {
+        triggerButtonPress(handObjects);
         projectileSystem.fire();
       }
     });
@@ -669,6 +670,9 @@
 
       // Update projectiles
       projectileSystem.update(dt);
+
+      // Update hand object animations
+      updateHandObjectAnimations(handObjects, gameState.getCurrentStage().id, dt);
 
       // Update camera debug display
       camPosValue.textContent = `${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}`;

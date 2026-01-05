@@ -66,101 +66,101 @@ export function createMobileControls() {
   const rightStick = createThumbstick('right-stick', 'right');
   mobileUI.appendChild(rightStick.container);
 
+  // Stage control bar (positioned at top, below debug panel)
+  const stageBar = document.createElement('div');
+  stageBar.id = 'mobile-stage-bar';
+  stageBar.style.cssText = `
+    position: fixed;
+    top: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    z-index: 1000;
+  `;
+  mobileUI.appendChild(stageBar);
+
   // Stage cycling - previous stage button (left arrow)
   const prevStageBtn = document.createElement('div');
   prevStageBtn.id = 'mobile-prev-stage';
   prevStageBtn.innerHTML = '&#9664;'; // Left triangle
   prevStageBtn.style.cssText = `
-    position: fixed;
-    bottom: 170px;
-    left: 60px;
-    width: 50px;
-    height: 50px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
-    background: rgba(100, 100, 100, 0.7);
-    border: 2px solid rgba(255, 255, 255, 0.5);
+    background: rgba(100, 100, 100, 0.8);
+    border: 2px solid rgba(255, 255, 255, 0.4);
     color: white;
-    font-size: 20px;
+    font-size: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
     touch-action: none;
-    z-index: 1000;
     user-select: none;
   `;
-  mobileUI.appendChild(prevStageBtn);
+  stageBar.appendChild(prevStageBtn);
+
+  // Stage name display (in the middle)
+  const stageDisplay = document.createElement('div');
+  stageDisplay.id = 'mobile-stage-display';
+  stageDisplay.textContent = 'Idle';
+  stageDisplay.style.cssText = `
+    min-width: 90px;
+    text-align: center;
+    padding: 4px 8px;
+    color: white;
+    font-family: monospace;
+    font-size: 11px;
+    user-select: none;
+  `;
+  stageBar.appendChild(stageDisplay);
 
   // Stage cycling - next stage button (right arrow)
   const nextStageBtn = document.createElement('div');
   nextStageBtn.id = 'mobile-next-stage';
   nextStageBtn.innerHTML = '&#9654;'; // Right triangle
   nextStageBtn.style.cssText = `
-    position: fixed;
-    bottom: 170px;
-    right: 60px;
-    width: 50px;
-    height: 50px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
-    background: rgba(100, 100, 100, 0.7);
-    border: 2px solid rgba(255, 255, 255, 0.5);
+    background: rgba(100, 100, 100, 0.8);
+    border: 2px solid rgba(255, 255, 255, 0.4);
     color: white;
-    font-size: 20px;
+    font-size: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
     touch-action: none;
-    z-index: 1000;
     user-select: none;
   `;
-  mobileUI.appendChild(nextStageBtn);
+  stageBar.appendChild(nextStageBtn);
 
-  // Action button (green, centered)
+  // Action button (green, part of the bar)
   const actionBtn = document.createElement('div');
   actionBtn.id = 'mobile-action-btn';
   actionBtn.textContent = 'ACTION';
   actionBtn.style.cssText = `
-    position: fixed;
-    bottom: 165px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 90px;
-    height: 60px;
-    border-radius: 12px;
-    background: rgba(60, 180, 60, 0.7);
+    margin-left: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: rgba(60, 180, 60, 0.8);
     border: 2px solid rgba(100, 220, 100, 0.8);
     color: white;
     font-family: monospace;
     font-weight: bold;
-    font-size: 12px;
+    font-size: 11px;
     display: flex;
     align-items: center;
     justify-content: center;
     touch-action: none;
-    z-index: 1000;
     user-select: none;
   `;
-  mobileUI.appendChild(actionBtn);
-
-  // Stage name display
-  const stageDisplay = document.createElement('div');
-  stageDisplay.id = 'mobile-stage-display';
-  stageDisplay.textContent = 'Idle';
-  stageDisplay.style.cssText = `
-    position: fixed;
-    bottom: 235px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 4px 12px;
-    border-radius: 6px;
-    background: rgba(0, 0, 0, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: white;
-    font-family: monospace;
-    font-size: 11px;
-    z-index: 1000;
-    user-select: none;
-  `;
-  mobileUI.appendChild(stageDisplay);
+  stageBar.appendChild(actionBtn);
 
   // State for thumbsticks
   const state = {
@@ -316,13 +316,14 @@ export function createMobileControls() {
     setOnAction(callback) {
       onAction = callback;
     },
-    // Show/hide stage cycling buttons (hidden in Drone View)
+    // Show/hide stage cycling arrows (hidden in Drone View, but keep action button)
     setStageCyclingVisible(visible) {
       const display = visible ? 'flex' : 'none';
       prevStageBtn.style.display = display;
       nextStageBtn.style.display = display;
-      actionBtn.style.display = visible ? 'flex' : 'none';
-      stageDisplay.style.display = visible ? 'block' : 'none';
+      // Always keep action button and stage display visible (needed to exit Drone View)
+      actionBtn.style.display = 'flex';
+      stageDisplay.style.display = 'block';
     },
     // Update stage display
     setStageDisplay(stageName) {

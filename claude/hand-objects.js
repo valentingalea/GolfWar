@@ -6,9 +6,10 @@ const darkMetal = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0
 const midMetal = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.5, metalness: 0.5 });
 const lightMetal = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.4, metalness: 0.6 });
 
-// Drone model for Idle stage
+// Drone model for Idle stage - with animated rotors
 function createDroneModel() {
   const group = new THREE.Group();
+  const rotorBlades = []; // Store blade pairs for animation
 
   // Central body - flat rectangular box
   const bodyGeom = new THREE.BoxGeometry(0.06, 0.015, 0.06);
@@ -24,7 +25,7 @@ function createDroneModel() {
     { x: -0.035, z: -0.035, rot: Math.PI / 4 }
   ];
 
-  armPositions.forEach(pos => {
+  armPositions.forEach((pos, index) => {
     const arm = new THREE.Mesh(armGeom, midMetal);
     arm.position.set(pos.x, 0, pos.z);
     arm.rotation.y = pos.rot;
@@ -36,16 +37,20 @@ function createDroneModel() {
     rotor.position.set(pos.x * 1.6, 0.005, pos.z * 1.6);
     group.add(rotor);
 
-    // Rotor blades (simple cross)
+    // Rotor blades group (for rotation animation)
+    const bladeGroup = new THREE.Group();
+    bladeGroup.position.set(pos.x * 1.6, 0.008, pos.z * 1.6);
+
     const bladeGeom = new THREE.BoxGeometry(0.025, 0.001, 0.004);
     const blade1 = new THREE.Mesh(bladeGeom, midMetal);
-    blade1.position.set(pos.x * 1.6, 0.008, pos.z * 1.6);
-    group.add(blade1);
+    bladeGroup.add(blade1);
 
     const blade2 = new THREE.Mesh(bladeGeom, midMetal);
-    blade2.position.set(pos.x * 1.6, 0.008, pos.z * 1.6);
     blade2.rotation.y = Math.PI / 2;
-    group.add(blade2);
+    bladeGroup.add(blade2);
+
+    group.add(bladeGroup);
+    rotorBlades.push(bladeGroup);
   });
 
   // Camera/sensor underneath
@@ -67,12 +72,15 @@ function createDroneModel() {
   // Scale to fit between hands
   group.scale.setScalar(1.8);
 
+  // Store rotor references for animation
+  group.userData.rotorBlades = rotorBlades;
+
   return group;
 }
 
-// Sphere model for Setup Projectile stage
+// Sphere model for Setup Projectile stage - scaled up
 function createSphereModel() {
-  const geometry = new THREE.SphereGeometry(0.035, 16, 16);
+  const geometry = new THREE.SphereGeometry(0.05, 16, 16); // Increased from 0.035
   const material = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 0.3,
@@ -82,7 +90,7 @@ function createSphereModel() {
   return sphere;
 }
 
-// Cog wheel model for Adjust Cannon stage
+// Cog wheel model for Adjust Cannon stage - with oscillating rotation
 function createCogWheelModel() {
   const group = new THREE.Group();
 
@@ -136,10 +144,13 @@ function createCogWheelModel() {
 
   group.scale.setScalar(1.5);
 
+  // Store animation state
+  group.userData.animTime = 0;
+
   return group;
 }
 
-// Button box model for Fire Cannon stage
+// Button box model for Fire Cannon stage - with animated button
 function createButtonBoxModel() {
   const group = new THREE.Group();
 
@@ -156,7 +167,7 @@ function createButtonBoxModel() {
   plate.position.y = 0.014;
   group.add(plate);
 
-  // Red button on top
+  // Red button on top (will be animated)
   const buttonGeom = new THREE.CylinderGeometry(0.016, 0.018, 0.012, 16);
   const buttonMat = new THREE.MeshStandardMaterial({
     color: 0xcc2222,
@@ -188,6 +199,14 @@ function createButtonBoxModel() {
   group.add(highlight);
 
   group.scale.setScalar(1.4);
+
+  // Store button reference for animation
+  group.userData.button = button;
+  group.userData.highlight = highlight;
+  group.userData.buttonBaseY = 0.022;
+  group.userData.highlightBaseY = 0.029;
+  group.userData.pressing = false;
+  group.userData.pressTime = 0;
 
   return group;
 }
@@ -234,4 +253,64 @@ export function createHandObjects() {
     'button-box': createButtonBoxModel(),
     'placeholder': createPlaceholderModel()
   };
+}
+
+// Animation update function - call from main loop
+export function updateHandObjectAnimations(handObjects, currentStageId, dt) {
+  // Drone rotor animation (always animate when visible)
+  const drone = handObjects['drone'];
+  if (drone && drone.userData.rotorBlades) {
+    const rotorSpeed = 25; // radians per second
+    drone.userData.rotorBlades.forEach((bladeGroup, index) => {
+      // Alternate direction for adjacent rotors
+      const direction = index % 2 === 0 ? 1 : -1;
+      bladeGroup.rotation.y += rotorSpeed * direction * dt;
+    });
+  }
+
+  // Cog oscillation animation (Adjust Cannon stage)
+  const cog = handObjects['cogwheel'];
+  if (cog && currentStageId === 'adjust-cannon') {
+    cog.userData.animTime = (cog.userData.animTime || 0) + dt;
+    const oscillation = Math.sin(cog.userData.animTime * 1.5) * 0.3; // Slow oscillation
+    cog.rotation.z = oscillation;
+  }
+
+  // Button press animation (Fire Cannon stage)
+  const buttonBox = handObjects['button-box'];
+  if (buttonBox && buttonBox.userData.pressing) {
+    buttonBox.userData.pressTime += dt;
+    const pressDuration = 0.15;
+    const returnDuration = 0.1;
+    const pressDepth = 0.008;
+
+    if (buttonBox.userData.pressTime < pressDuration) {
+      // Pressing down
+      const t = buttonBox.userData.pressTime / pressDuration;
+      const offset = pressDepth * Math.sin(t * Math.PI / 2);
+      buttonBox.userData.button.position.y = buttonBox.userData.buttonBaseY - offset;
+      buttonBox.userData.highlight.position.y = buttonBox.userData.highlightBaseY - offset;
+    } else if (buttonBox.userData.pressTime < pressDuration + returnDuration) {
+      // Returning up
+      const t = (buttonBox.userData.pressTime - pressDuration) / returnDuration;
+      const offset = pressDepth * (1 - t);
+      buttonBox.userData.button.position.y = buttonBox.userData.buttonBaseY - offset;
+      buttonBox.userData.highlight.position.y = buttonBox.userData.highlightBaseY - offset;
+    } else {
+      // Animation complete
+      buttonBox.userData.pressing = false;
+      buttonBox.userData.pressTime = 0;
+      buttonBox.userData.button.position.y = buttonBox.userData.buttonBaseY;
+      buttonBox.userData.highlight.position.y = buttonBox.userData.highlightBaseY;
+    }
+  }
+}
+
+// Trigger button press animation
+export function triggerButtonPress(handObjects) {
+  const buttonBox = handObjects['button-box'];
+  if (buttonBox) {
+    buttonBox.userData.pressing = true;
+    buttonBox.userData.pressTime = 0;
+  }
 }
