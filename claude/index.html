@@ -123,8 +123,17 @@
       }
       /* Hide verbose debug info on mobile */
       .hud-row:has(#camPosValue),
-      .hud-row:has(#camRotValue) {
+      .hud-row:has(#camRotValue),
+      .hud-row:has(#stageValue) {
         display: none;
+      }
+      /* Hide divider after stage row */
+      .hud-row:has(#stageValue) + .hud-divider {
+        display: none;
+      }
+      /* Push HUD down below mobile stage bar */
+      #hud {
+        top: 60px;
       }
     }
 

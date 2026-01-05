@@ -66,12 +66,12 @@ export function createMobileControls() {
   const rightStick = createThumbstick('right-stick', 'right');
   mobileUI.appendChild(rightStick.container);
 
-  // Stage control bar (positioned at top, below debug panel)
+  // Stage control bar (positioned at very top)
   const stageBar = document.createElement('div');
   stageBar.id = 'mobile-stage-bar';
   stageBar.style.cssText = `
     position: fixed;
-    top: 120px;
+    top: 10px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -81,7 +81,7 @@ export function createMobileControls() {
     border-radius: 8px;
     background: rgba(0, 0, 0, 0.7);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    z-index: 1000;
+    z-index: 1001;
   `;
   mobileUI.appendChild(stageBar);
 
