@@ -72,6 +72,9 @@ function createDroneModel() {
   // Scale to fit between hands
   group.scale.setScalar(1.8);
 
+  // Raise drone higher than other held objects
+  group.position.y = 0.06;
+
   // Store rotor references for animation
   group.userData.rotorBlades = rotorBlades;
 

@@ -193,7 +193,7 @@ export function createFirstPersonHands(camera) {
 
   // Held object slot - positioned between hands, slightly forward
   const heldObjectSlot = new THREE.Group();
-  heldObjectSlot.position.set(0, -0.06, -0.32);
+  heldObjectSlot.position.set(0, -0.12, -0.32);
   handsRig.add(heldObjectSlot);
 
   // Track current held object
