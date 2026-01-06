@@ -266,6 +266,14 @@ export function updateHandObjectAnimations(handObjects, currentStageId, dt) {
       const direction = index % 2 === 0 ? 1 : -1;
       bladeGroup.rotation.y += rotorSpeed * direction * dt;
     });
+
+    // Wobble animation - different frequencies for organic movement
+    drone.userData.wobbleTime = (drone.userData.wobbleTime || 0) + dt;
+    const t = drone.userData.wobbleTime;
+    const wobbleAmount = 0.08; // radians
+    drone.rotation.x = Math.sin(t * 1.3) * wobbleAmount;
+    drone.rotation.y = Math.sin(t * 0.9) * wobbleAmount * 0.7;
+    drone.rotation.z = Math.sin(t * 1.7) * wobbleAmount * 0.5;
   }
 
   // Cog oscillation animation (Adjust Cannon stage)
