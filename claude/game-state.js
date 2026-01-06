@@ -141,6 +141,14 @@ export function createGameState(callbacks) {
         setStage(4); // Drone View
         break;
       case 'toggleGameUI':
+        // For setup-projectile, check if we should load cannon instead
+        if (stage.id === 'setup-projectile' && callbacks.tryLoadCannon) {
+          const loaded = callbacks.tryLoadCannon();
+          if (loaded) {
+            // Ball was loaded into cannon, don't show UI
+            return;
+          }
+        }
         state.gameUIVisible = !state.gameUIVisible;
         if (callbacks.setGameUIVisible) {
           callbacks.setGameUIVisible(stage.gameUI, state.gameUIVisible);

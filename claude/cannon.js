@@ -272,6 +272,19 @@ export function createHowitzer(scene) {
   muzzleFlash.position.set(0, 0.05, innerBarrelLength + 1.0);
   elevatingGroup.add(muzzleFlash);
 
+  // Loaded ball (shown at breech when cannon is loaded)
+  const loadedBallGeometry = new THREE.SphereGeometry(0.12, 16, 16);
+  const loadedBallMaterial = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.2,
+    metalness: 0.1
+  });
+  const loadedBall = new THREE.Mesh(loadedBallGeometry, loadedBallMaterial);
+  loadedBall.position.set(0, 0.05, 0.35); // Near the breech
+  loadedBall.visible = false;
+  loadedBall.castShadow = true;
+  elevatingGroup.add(loadedBall);
+
   // Enable shadows
   howitzer.traverse((child) => {
     if (child.isMesh) {
@@ -291,6 +304,7 @@ export function createHowitzer(scene) {
     outerBarrel,
     muzzleBrake,
     muzzleFlash,
+    loadedBall,
     wheelRadius,
     innerBarrelLength,
     // Base positions for animation
@@ -428,6 +442,10 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
     metalness: 0.1
   });
 
+  // Cannon loaded state
+  let isLoaded = false;
+  let onBallStabilizedCallback = null;
+
   // Physics constants
   const physics = {
     baseRestitution: 0.75,    // Base bounciness (0-1)
@@ -478,6 +496,11 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
   }
 
   function fire() {
+    // Cannot fire if not loaded
+    if (!isLoaded) {
+      return false;
+    }
+
     const velocity = parseFloat(velocityInput.value) || 20;
     const mass = parseFloat(massInput.value) || 10;
     const recoilSpeed = parseFloat(recoilSpeedInput.value) || 2;
@@ -506,12 +529,19 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
       mass: mass,
       smokeTimer: 0,
       state: 'flying',      // flying, rolling, stopped
-      bounceCount: 0
+      bounceCount: 0,
+      notifiedStabilized: false
     });
+
+    // Unload cannon after firing
+    isLoaded = false;
+    howitzer.loadedBall.visible = false;
 
     firingAnim.active = true;
     firingAnim.time = 0;
     howitzer.muzzleFlash.material.opacity = 1;
+
+    return true;
   }
 
   function update(dt) {
@@ -583,6 +613,12 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
           // Ball stopped
           proj.state = 'stopped';
           proj.velocity.set(0, 0, 0);
+
+          // Notify that ball has stabilized
+          if (!proj.notifiedStabilized && onBallStabilizedCallback) {
+            proj.notifiedStabilized = true;
+            onBallStabilizedCallback(proj);
+          }
         } else {
           // Decelerate due to rolling friction
           const friction = physics.rollingFriction * dt;
@@ -639,5 +675,36 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
     }
   }
 
-  return { fire, update };
+  return {
+    fire,
+    update,
+    // Cannon loading methods
+    loadCannon() {
+      isLoaded = true;
+      howitzer.loadedBall.visible = true;
+    },
+    unloadCannon() {
+      isLoaded = false;
+      howitzer.loadedBall.visible = false;
+    },
+    isLoaded() {
+      return isLoaded;
+    },
+    // Check if ball is available (not loaded, not in flight)
+    isBallAvailable() {
+      // Ball is available if cannon is not loaded AND no active projectiles
+      if (isLoaded) return false;
+      // Check if any projectile is still active (not stopped)
+      const hasActiveProjectile = projectiles.some(p => p.state !== 'stopped');
+      return !hasActiveProjectile;
+    },
+    // Set callback for when ball stabilizes on ground
+    onBallStabilized(callback) {
+      onBallStabilizedCallback = callback;
+    },
+    // Get cannon world position for distance checks
+    getCannonPosition() {
+      return howitzer.group.position.clone();
+    }
+  };
 }

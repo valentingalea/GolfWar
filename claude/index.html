@@ -434,6 +434,9 @@
       }
     }
 
+    // ========== CANNON LOADING CONFIG ==========
+    const CANNON_LOAD_DISTANCE = 3.5; // Distance threshold to load cannon
+
     // ========== GAME STATE MACHINE ==========
     const gameState = createGameState({
       onStageEnter: (stage) => {
@@ -443,8 +446,15 @@
           mobileControls.setStageDisplay(stage.name);
         }
 
-        // Update held object
-        if (stage.handObject) {
+        // Update held object based on stage
+        if (stage.id === 'setup-projectile') {
+          // Special case: only show ball if available (not loaded, not in flight)
+          if (projectileSystem.isBallAvailable()) {
+            hands.setHeldObject(handObjects['sphere']);
+          } else {
+            hands.setHeldObject(null); // Ball is in cannon or in flight
+          }
+        } else if (stage.handObject) {
           hands.setHeldObject(handObjects[stage.handObject]);
         } else {
           hands.setHeldObject(null);
@@ -493,9 +503,41 @@
         }
       },
 
+      // Try to load cannon if player is close enough
+      tryLoadCannon: () => {
+        // Ball not available (loaded or in flight)? Action does nothing
+        if (!projectileSystem.isBallAvailable()) {
+          return true; // Return true to prevent UI from showing
+        }
+
+        // Check distance to cannon
+        const cannonPos = projectileSystem.getCannonPosition();
+        const distance = camera.position.distanceTo(cannonPos);
+
+        if (distance <= CANNON_LOAD_DISTANCE) {
+          // Load cannon and remove ball from hand
+          projectileSystem.loadCannon();
+          hands.setHeldObject(null);
+          return true;
+        }
+
+        return false;
+      },
+
       fireCannon: () => {
+        // Always animate button press
         triggerButtonPress(handObjects);
+        // Only actually fire if loaded (fire returns false if not loaded)
         projectileSystem.fire();
+      }
+    });
+
+    // ========== BALL STABILIZATION CALLBACK ==========
+    projectileSystem.onBallStabilized(() => {
+      // Reset state: ball is back in hand (if in setup-projectile stage)
+      const currentStage = gameState.getCurrentStage();
+      if (currentStage.id === 'setup-projectile') {
+        hands.setHeldObject(handObjects['sphere']);
       }
     });
 
