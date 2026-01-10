@@ -10,7 +10,8 @@ export function createDroneSystem(camera, renderer, config) {
     savedPitch: 0,
     speed: config.defaultSpeed || 50,
     startHeight: config.startHeight || 25,
-    startOffset: config.startOffset || { x: -3, z: 5 }
+    startOffset: config.startOffset || { x: -3, z: 5 },
+    cannonPosition: config.cannonPosition || { x: 3, y: 0, z: 0 }
   };
 
   // Vignette overlay element
@@ -91,13 +92,11 @@ export function createDroneSystem(camera, renderer, config) {
     state.savedYaw = currentYaw;
     state.savedPitch = currentPitch;
 
-    // Move camera to drone start position (offset from cannon at 3,0,0)
-    const cannonX = 3;
-    const cannonZ = 0;
+    // Move camera to drone start position (offset from cannon)
     camera.position.set(
-      cannonX + state.startOffset.x,
+      state.cannonPosition.x + state.startOffset.x,
       state.startHeight,
-      cannonZ + state.startOffset.z
+      state.cannonPosition.z + state.startOffset.z
     );
 
     state.active = true;

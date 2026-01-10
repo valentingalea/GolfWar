@@ -99,11 +99,15 @@ function createMuzzleFlashTexture() {
 }
 
 // Create the complete howitzer model
-export function createHowitzer(scene) {
+export function createHowitzer(scene, config = {}) {
+  const position = config.position || { x: 3, y: 0, z: 0 };
+  const rotation = config.rotation !== undefined ? config.rotation : Math.PI;
+  const scale = config.scale || 1.2;
+
   const howitzer = new THREE.Group();
-  howitzer.position.set(3, 0, 0);
-  howitzer.rotation.y = Math.PI;
-  howitzer.scale.setScalar(1.2);
+  howitzer.position.set(position.x, position.y, position.z);
+  howitzer.rotation.y = rotation;
+  howitzer.scale.setScalar(scale);
   scene.add(howitzer);
 
   // Carriage group - moves during recoil

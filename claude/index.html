@@ -234,11 +234,18 @@
     import { createGameUI } from './game-ui.js';
 
     const CONFIG = {
+      // Cannon is the origin point - other positions are relative to it
+      cannon: {
+        position: { x: 3, y: 0, z: 0 },
+        rotation: Math.PI,
+        scale: 1.2
+      },
       camera: {
         fov: 65,
         near: 0.1,
         far: 5000,
-        position: { x: 1.5, y: 1.6, z: 2.2 },
+        // Offset from cannon position
+        startOffset: { x: -1.5, y: 1.6, z: 2.2 },
         initialYawDeg: 356,
         initialPitchDeg: 0
       },
@@ -281,10 +288,11 @@
       CONFIG.camera.near,
       CONFIG.camera.far
     );
+    // Position camera relative to cannon
     camera.position.set(
-      CONFIG.camera.position.x,
-      CONFIG.camera.position.y,
-      CONFIG.camera.position.z
+      CONFIG.cannon.position.x + CONFIG.camera.startOffset.x,
+      CONFIG.cannon.position.y + CONFIG.camera.startOffset.y,
+      CONFIG.cannon.position.z + CONFIG.camera.startOffset.z
     );
     camera.rotation.order = 'YXZ';
     scene.add(camera); // Add camera to scene so attached objects render
@@ -383,7 +391,7 @@
     scene.add(floor);
 
     // ========== HOWITZER ==========
-    const howitzerData = createHowitzer(scene);
+    const howitzerData = createHowitzer(scene, CONFIG.cannon);
     const firingAnim = createFiringAnimation();
     const cannonControls = createCannonControls(howitzerData);
     const projectileSystem = createProjectileSystem(scene, howitzerData, firingAnim);
@@ -400,7 +408,10 @@
     applyCameraOrientation();
 
     // ========== DRONE SYSTEM ==========
-    const droneSystem = createDroneSystem(camera, renderer, CONFIG.drone);
+    const droneSystem = createDroneSystem(camera, renderer, {
+      ...CONFIG.drone,
+      cannonPosition: CONFIG.cannon.position
+    });
     const droneSpeedInput = document.getElementById('droneSpeedInput');
     const droneHeightInput = document.getElementById('droneHeightInput');
 
