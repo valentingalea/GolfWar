@@ -126,10 +126,12 @@ export function createGameState(callbacks) {
     return true;
   }
 
-  function goToStage(index) {
+  function goToStage(index, force = false) {
     // Direct stage access (1-6 keys map to 0-5 indices)
-    if (index === 4) return false; // Cannot directly enter drone view
-    if (!canCycle() && index !== 0) return false; // From drone view, only allow going to idle
+    if (!force) {
+      if (index === 4) return false; // Cannot directly enter drone view via keyboard
+      if (!canCycle() && index !== 0) return false; // From drone view, only allow going to idle
+    }
     return setStage(index);
   }
 

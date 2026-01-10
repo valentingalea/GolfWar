@@ -4,11 +4,16 @@ import * as THREE from 'three';
 export function createDroneSystem(camera, renderer, config) {
   const state = {
     active: false,
+    transitioning: false,        // True while animating to drone position
+    transitionProgress: 0,       // 0 to 1
+    transitionStart: new THREE.Vector3(),
+    transitionEnd: new THREE.Vector3(),
     savedCameraPosition: new THREE.Vector3(),
     savedCameraRotation: new THREE.Euler(),
     savedYaw: 0,
     savedPitch: 0,
     speed: config.defaultSpeed || 50,
+    transitionSpeed: config.transitionSpeed || 15, // Vertical m/s during transition
     startHeight: config.startHeight || 25,
     startOffset: config.startOffset || { x: -3, z: 5 },
     cannonPosition: config.cannonPosition || { x: 3, y: 0, z: 0 }
@@ -84,35 +89,36 @@ export function createDroneSystem(camera, renderer, config) {
   document.body.appendChild(droneHud);
 
   function activate(currentYaw, currentPitch) {
-    if (state.active) return;
+    if (state.active || state.transitioning) return;
 
-    // Save current camera state
+    // Save current camera state for restoration on deactivate
     state.savedCameraPosition.copy(camera.position);
     state.savedCameraRotation.copy(camera.rotation);
     state.savedYaw = currentYaw;
     state.savedPitch = currentPitch;
 
-    // Move camera to drone start position (offset from cannon)
-    camera.position.set(
-      state.cannonPosition.x + state.startOffset.x,
+    // Setup transition animation - only move vertically, view stays free
+    state.transitionStart.copy(camera.position);
+    state.transitionEnd.set(
+      camera.position.x,  // Keep X position
       state.startHeight,
-      state.cannonPosition.z + state.startOffset.z
+      camera.position.z   // Keep Z position
     );
+    state.transitionProgress = 0;
+    state.transitioning = true;
 
-    state.active = true;
-
-    // Show vignette and HUD
+    // Show vignette and HUD immediately
     vignette.style.opacity = '1';
     scanlines.style.opacity = '1';
     droneHud.style.opacity = '1';
 
-    console.log(`Drone activated at height ${state.startHeight}m`);
+    console.log(`Drone transition started, target height ${state.startHeight}m`);
 
     return { yaw: currentYaw, pitch: currentPitch };
   }
 
   function deactivate() {
-    if (!state.active) return null;
+    if (!state.active && !state.transitioning) return null;
 
     // Restore camera to saved position
     camera.position.copy(state.savedCameraPosition);
@@ -122,6 +128,7 @@ export function createDroneSystem(camera, renderer, config) {
     const savedPitch = state.savedPitch;
 
     state.active = false;
+    state.transitioning = false;
 
     // Hide vignette and HUD
     vignette.style.opacity = '0';
@@ -134,7 +141,7 @@ export function createDroneSystem(camera, renderer, config) {
   }
 
   function toggle(currentYaw, currentPitch) {
-    if (state.active) {
+    if (state.active || state.transitioning) {
       return { active: false, ...deactivate() };
     } else {
       return { active: true, ...activate(currentYaw, currentPitch) };
@@ -142,6 +149,43 @@ export function createDroneSystem(camera, renderer, config) {
   }
 
   function update(dt, moveForward, moveRight, yaw) {
+    // Handle transition animation (position only - view is free for user control)
+    if (state.transitioning) {
+      // Instant teleport if transitionSpeed is 0
+      if (state.transitionSpeed <= 0) {
+        state.transitionProgress = 1;
+      } else {
+        // Calculate distance and travel time
+        const totalDistance = state.transitionStart.distanceTo(state.transitionEnd);
+        const travelTime = totalDistance / state.transitionSpeed;
+        // Update progress
+        state.transitionProgress += dt / travelTime;
+      }
+
+      if (state.transitionProgress >= 1) {
+        // Transition complete
+        state.transitionProgress = 1;
+        state.transitioning = false;
+        state.active = true;
+        camera.position.copy(state.transitionEnd);
+        console.log('Drone transition complete, control released');
+      } else {
+        // Smooth easing (ease-out cubic)
+        const t = state.transitionProgress;
+        const eased = 1 - Math.pow(1 - t, 3);
+
+        // Interpolate position (Y only) - rotation is free for user control
+        camera.position.lerpVectors(state.transitionStart, state.transitionEnd, eased);
+      }
+
+      // Update altitude display during transition
+      const altitudeEl = document.getElementById('drone-altitude');
+      if (altitudeEl) {
+        altitudeEl.textContent = `ALT: ${camera.position.y.toFixed(0)}m`;
+      }
+      return;
+    }
+
     if (!state.active) return;
 
     // Update altitude display
@@ -171,7 +215,20 @@ export function createDroneSystem(camera, renderer, config) {
   }
 
   function isActive() {
-    return state.active;
+    return state.active || state.transitioning;
+  }
+
+  function isTransitioning() {
+    return state.transitioning;
+  }
+
+  function setTransitionSpeed(speed) {
+    state.transitionSpeed = Math.max(0, Math.min(100, speed));
+    return state.transitionSpeed;
+  }
+
+  function getTransitionSpeed() {
+    return state.transitionSpeed;
   }
 
   return {
@@ -182,7 +239,10 @@ export function createDroneSystem(camera, renderer, config) {
     adjustSpeed,
     setSpeed,
     setStartHeight,
+    setTransitionSpeed,
     getSpeed,
-    isActive
+    getTransitionSpeed,
+    isActive,
+    isTransitioning
   };
 }

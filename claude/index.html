@@ -196,6 +196,11 @@
         <input id="droneSpeedInput" class="hud-input" type="number" value="50" min="10" max="500" step="10" />
         <span class="hud-unit">m/s</span>
       </div>
+      <div class="hud-row">
+        <span class="hud-label">Transition</span>
+        <input id="droneTransitionInput" class="hud-input" type="number" value="15" min="0" max="100" step="5" />
+        <span class="hud-unit">m/s</span>
+      </div>
     </div>
 
     <!-- Stage-specific: Recoil settings (Fire Cannon stage) -->
@@ -210,6 +215,17 @@
         <span class="hud-label">Outer Recoil</span>
         <input id="outerRecoilSpeedInput" class="hud-input" type="number" value="4" min="1" max="20" step="1" />
         <span class="hud-unit"></span>
+      </div>
+      <div class="hud-row">
+        <label class="hud-label" style="cursor:pointer;">
+          <input type="checkbox" id="autoFollowShot" style="margin-right:6px;" checked />
+          Auto-follow shot
+        </label>
+      </div>
+      <div class="hud-row">
+        <span class="hud-label">Follow Delay</span>
+        <input id="autoFollowDelay" class="hud-input" type="number" value="2" min="0" max="10" step="0.5" />
+        <span class="hud-unit">sec</span>
       </div>
     </div>
 
@@ -380,14 +396,19 @@
     const droneSystem = createDroneSystem(camera, renderer, CONFIG.buildDroneConfig(gameSession.currentHole));
     const droneSpeedInput = document.getElementById('droneSpeedInput');
     const droneHeightInput = document.getElementById('droneHeightInput');
+    const droneTransitionInput = document.getElementById('droneTransitionInput');
 
     // Update drone config from UI
     droneHeightInput.addEventListener('change', () => {
-      droneSystem.setStartHeight(parseFloat(droneHeightInput.value) || 500);
+      droneSystem.setStartHeight(parseFloat(droneHeightInput.value) || 25);
     });
 
     droneSpeedInput.addEventListener('change', () => {
       droneSystem.setSpeed(parseFloat(droneSpeedInput.value) || 50);
+    });
+
+    droneTransitionInput.addEventListener('change', () => {
+      droneSystem.setTransitionSpeed(parseFloat(droneTransitionInput.value) || 15);
     });
 
     // ========== MOBILE CONTROLS ==========
@@ -505,7 +526,20 @@
         // Always animate button press
         triggerButtonPress(handObjects);
         // Only actually fire if loaded (fire returns false if not loaded)
-        projectileSystem.fire();
+        const fired = projectileSystem.fire();
+
+        // Auto-follow: switch to drone view after successful fire (with delay)
+        if (fired) {
+          const autoFollowCheckbox = document.getElementById('autoFollowShot');
+          if (autoFollowCheckbox && autoFollowCheckbox.checked) {
+            const delayInput = document.getElementById('autoFollowDelay');
+            const delaySec = parseFloat(delayInput?.value) || 2;
+            setTimeout(() => {
+              // Go to drone view (stage index 4), force=true to bypass keyboard restriction
+              gameState.goToStage(4, true);
+            }, delaySec * 1000);
+          }
+        }
       }
     });
 
