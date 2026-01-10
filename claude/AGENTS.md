@@ -38,7 +38,7 @@ This folder contains a Three.js web prototype for an artillery golf game. The pl
 | File | Purpose |
 |------|---------|
 | `hands.js` | First-person hands rig attached to camera |
-| `hand-objects.js` | 3D models held in hands per stage (drone, ball, cogwheel, button) |
+| `hand-objects.js` | 3D models held in hands per stage (drone, ball, wrench, button) |
 | `game-ui.js` | Center-screen overlay panels for projectile/cannon settings |
 | `mobile-controls.js` | Touch thumbsticks and buttons for mobile devices |
 
@@ -50,7 +50,7 @@ The game uses a 6-stage state machine defined in `game-state.js`:
 |-------|----------|-------------|--------|
 | 0 | `idle` | Drone model | Enter Drone View |
 | 1 | `setup-projectile` | Golf ball | Toggle velocity/mass UI (or load cannon if close) |
-| 2 | `adjust-cannon` | Cogwheel | Toggle rotation/elevation UI |
+| 2 | `adjust-cannon` | Wrench | Toggle rotation/elevation UI |
 | 3 | `fire-cannon` | Button box | Fire the cannon |
 | 4 | `drone-view` | (hidden) | Exit back to Idle |
 | 5 | `move-next` | Placeholder | (not implemented) |

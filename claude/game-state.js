@@ -27,7 +27,7 @@ const STAGES = [
     id: 'adjust-cannon',
     index: 2,
     name: 'Adjust Cannon',
-    handObject: 'cogwheel',
+    handObject: 'wrench',
     debugSection: null,
     gameUI: 'cannon',
     canCycle: true,

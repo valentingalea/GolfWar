@@ -93,62 +93,46 @@ function createSphereModel() {
   return sphere;
 }
 
-// Cog wheel model for Adjust Cannon stage - with oscillating rotation
-function createCogWheelModel() {
+// Wrench model for Adjust Cannon stage
+function createWrenchModel() {
   const group = new THREE.Group();
 
-  // Central hub
-  const hubGeom = new THREE.CylinderGeometry(0.018, 0.018, 0.012, 16);
-  const hub = new THREE.Mesh(hubGeom, lightMetal);
-  hub.rotation.x = Math.PI / 2;
-  group.add(hub);
+  // Handle (long shaft)
+  const handleGeom = new THREE.BoxGeometry(0.012, 0.08, 0.006);
+  const handle = new THREE.Mesh(handleGeom, lightMetal);
+  handle.position.y = -0.01;
+  group.add(handle);
 
-  // Outer ring
-  const ringGeom = new THREE.TorusGeometry(0.032, 0.006, 8, 24);
-  const ring = new THREE.Mesh(ringGeom, midMetal);
-  group.add(ring);
+  // Head base (thicker part at top)
+  const headBaseGeom = new THREE.BoxGeometry(0.035, 0.025, 0.008);
+  const headBase = new THREE.Mesh(headBaseGeom, midMetal);
+  headBase.position.y = 0.04;
+  group.add(headBase);
 
-  // Teeth (12 teeth around the wheel)
-  const toothCount = 12;
-  const toothGeom = new THREE.BoxGeometry(0.012, 0.008, 0.012);
+  // Open jaw - left side (longer, open ended)
+  const jawGeom = new THREE.BoxGeometry(0.008, 0.025, 0.008);
+  const leftJaw = new THREE.Mesh(jawGeom, midMetal);
+  leftJaw.position.set(-0.014, 0.062, 0);
+  group.add(leftJaw);
 
-  for (let i = 0; i < toothCount; i++) {
-    const angle = (i / toothCount) * Math.PI * 2;
-    const tooth = new THREE.Mesh(toothGeom, midMetal);
-    tooth.position.set(
-      Math.cos(angle) * 0.042,
-      Math.sin(angle) * 0.042,
-      0
-    );
-    tooth.rotation.z = angle;
-    group.add(tooth);
-  }
+  // Open jaw - right side (shorter to show opening)
+  const rightJawGeom = new THREE.BoxGeometry(0.008, 0.018, 0.008);
+  const rightJaw = new THREE.Mesh(rightJawGeom, midMetal);
+  rightJaw.position.set(0.014, 0.058, 0);
+  group.add(rightJaw);
 
-  // Spokes connecting hub to ring
-  const spokeGeom = new THREE.BoxGeometry(0.025, 0.004, 0.006);
+  // Handle grip texture (small ridges)
+  const gripGeom = new THREE.BoxGeometry(0.014, 0.004, 0.008);
   for (let i = 0; i < 4; i++) {
-    const angle = (i / 4) * Math.PI * 2;
-    const spoke = new THREE.Mesh(spokeGeom, lightMetal);
-    spoke.position.set(
-      Math.cos(angle) * 0.018,
-      Math.sin(angle) * 0.018,
-      0
-    );
-    spoke.rotation.z = angle;
-    group.add(spoke);
+    const grip = new THREE.Mesh(gripGeom, darkMetal);
+    grip.position.y = -0.035 + i * 0.012;
+    group.add(grip);
   }
 
-  // Center hole
-  const holeGeom = new THREE.CylinderGeometry(0.006, 0.006, 0.015, 6);
-  const holeMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
-  const hole = new THREE.Mesh(holeGeom, holeMat);
-  hole.rotation.x = Math.PI / 2;
-  group.add(hole);
+  group.scale.setScalar(1.8);
 
-  group.scale.setScalar(1.5);
-
-  // Store animation state
-  group.userData.animTime = 0;
+  // Static rotation - -40 degrees on Z
+  group.rotation.z = THREE.MathUtils.degToRad(-40);
 
   return group;
 }
@@ -252,7 +236,7 @@ export function createHandObjects() {
   return {
     'drone': createDroneModel(),
     'sphere': createSphereModel(),
-    'cogwheel': createCogWheelModel(),
+    'wrench': createWrenchModel(),
     'button-box': createButtonBoxModel(),
     'placeholder': createPlaceholderModel()
   };
@@ -277,14 +261,6 @@ export function updateHandObjectAnimations(handObjects, currentStageId, dt) {
     drone.rotation.x = Math.sin(t * 1.3) * wobbleAmount;
     drone.rotation.y = Math.sin(t * 0.9) * wobbleAmount * 0.7;
     drone.rotation.z = Math.sin(t * 1.7) * wobbleAmount * 0.5;
-  }
-
-  // Cog oscillation animation (Adjust Cannon stage)
-  const cog = handObjects['cogwheel'];
-  if (cog && currentStageId === 'adjust-cannon') {
-    cog.userData.animTime = (cog.userData.animTime || 0) + dt;
-    const oscillation = Math.sin(cog.userData.animTime * 1.5) * 0.3; // Slow oscillation
-    cog.rotation.z = oscillation;
   }
 
   // Button press animation (Fire Cannon stage)

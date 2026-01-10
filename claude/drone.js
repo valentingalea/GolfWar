@@ -167,15 +167,16 @@ export function createDroneSystem(camera, renderer, config) {
         state.transitionProgress = 1;
         state.transitioning = false;
         state.active = true;
-        camera.position.copy(state.transitionEnd);
+        camera.position.y = state.transitionEnd.y;
         console.log('Drone transition complete, control released');
       } else {
         // Smooth easing (ease-out cubic)
         const t = state.transitionProgress;
         const eased = 1 - Math.pow(1 - t, 3);
 
-        // Interpolate position (Y only) - rotation is free for user control
-        camera.position.lerpVectors(state.transitionStart, state.transitionEnd, eased);
+        // Only interpolate Y position - X/Z are free for user movement
+        const targetY = state.transitionStart.y + (state.transitionEnd.y - state.transitionStart.y) * eased;
+        camera.position.y = targetY;
       }
 
       // Update altitude display during transition
