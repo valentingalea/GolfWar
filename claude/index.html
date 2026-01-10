@@ -232,48 +232,13 @@
     import { createGameState } from './game-state.js';
     import { createHandObjects, updateHandObjectAnimations, triggerButtonPress } from './hand-objects.js';
     import { createGameUI } from './game-ui.js';
+    import * as CONFIG from './config.js';
 
-    const CONFIG = {
-      // Cannon is the origin point - other positions are relative to it
-      cannon: {
-        position: { x: 3, y: 0, z: 0 },
-        rotation: Math.PI,
-        scale: 1.2
-      },
-      camera: {
-        fov: 65,
-        near: 0.1,
-        far: 5000,
-        // Offset from cannon position
-        startOffset: { x: -1.5, y: 1.6, z: 2.2 },
-        initialYawDeg: 356,
-        initialPitchDeg: 0
-      },
-      axis: {
-        origin: { x: 0, y: 0.5, z: 0 },
-        size: 2,
-        labelOffset: 2.3,
-        labelSize: 0.3
-      },
-      controls: {
-        lookSensitivity: 0.003,
-        maxPitchDeg: 89,
-        moveSpeed: 5.0
-      },
-      floor: {
-        size: 4000  // 4k x 4k floor
-      },
-      drone: {
-        defaultSpeed: 50,
-        startHeight: 25,
-        startOffset: { x: -3, z: 5 }  // Behind and to the left of cannon
-      },
-      sun: {
-        hour: 12,
-        skyRadius: 3000,
-        sunDistance: 2900,
-        sunSize: 200
-      }
+    // ========== GAME SESSION STATE ==========
+    const gameSession = {
+      currentHole: 1,
+      shotCount: 0,
+      scores: []  // Array of { hole, shots, par }
     };
 
     // ========== RENDERER & SCENE ==========
@@ -283,17 +248,14 @@
 
     // ========== CAMERA ==========
     const camera = new THREE.PerspectiveCamera(
-      CONFIG.camera.fov,
+      CONFIG.CAMERA.fov,
       window.innerWidth / window.innerHeight,
-      CONFIG.camera.near,
-      CONFIG.camera.far
+      CONFIG.CAMERA.near,
+      CONFIG.CAMERA.far
     );
-    // Position camera relative to cannon
-    camera.position.set(
-      CONFIG.cannon.position.x + CONFIG.camera.startOffset.x,
-      CONFIG.cannon.position.y + CONFIG.camera.startOffset.y,
-      CONFIG.cannon.position.z + CONFIG.camera.startOffset.z
-    );
+    // Position camera relative to cannon (for current hole)
+    const cameraStart = CONFIG.buildCameraStartPosition(gameSession.currentHole);
+    camera.position.set(cameraStart.x, cameraStart.y, cameraStart.z);
     camera.rotation.order = 'YXZ';
     scene.add(camera); // Add camera to scene so attached objects render
 
@@ -310,21 +272,28 @@
     const lighting = createLighting(scene);
 
     // ========== SKYBOX ==========
-    const skybox = createSkybox(CONFIG.sun);
+    // Build sun config from WORLD settings
+    const sunConfig = {
+      hour: CONFIG.WORLD.sky.defaultHour,
+      skyRadius: CONFIG.WORLD.sky.radius,
+      sunDistance: CONFIG.WORLD.sky.sunDistance,
+      sunSize: CONFIG.WORLD.sky.sunSize
+    };
+    const skybox = createSkybox(sunConfig);
     scene.add(skybox);
 
     // ========== SUN ==========
-    const sun = createSun(CONFIG.sun);
+    const sun = createSun(sunConfig);
     scene.add(sun);
 
     // ========== HOUR CONTROL ==========
-    const hourControl = setupHourControl(sun, skybox, scene, lighting, CONFIG.sun);
+    const hourControl = setupHourControl(sun, skybox, scene, lighting, sunConfig);
 
     // ========== AXIS HELPER ==========
     const axisOrigin = new THREE.Vector3(
-      CONFIG.axis.origin.x,
-      CONFIG.axis.origin.y,
-      CONFIG.axis.origin.z
+      CONFIG.WORLD.axis.origin.x,
+      CONFIG.WORLD.axis.origin.y,
+      CONFIG.WORLD.axis.origin.z
     );
 
     function createAxisLine(direction, color, length) {
@@ -337,9 +306,9 @@
       return new THREE.Line(geometry, material);
     }
 
-    const xAxis = createAxisLine(new THREE.Vector3(1, 0, 0), 0xff4444, CONFIG.axis.size);
-    const yAxis = createAxisLine(new THREE.Vector3(0, 1, 0), 0x44ff44, CONFIG.axis.size);
-    const zAxis = createAxisLine(new THREE.Vector3(0, 0, 1), 0x4444ff, CONFIG.axis.size);
+    const xAxis = createAxisLine(new THREE.Vector3(1, 0, 0), 0xff4444, CONFIG.WORLD.axis.size);
+    const yAxis = createAxisLine(new THREE.Vector3(0, 1, 0), 0x44ff44, CONFIG.WORLD.axis.size);
+    const zAxis = createAxisLine(new THREE.Vector3(0, 0, 1), 0x4444ff, CONFIG.WORLD.axis.size);
     scene.add(xAxis, yAxis, zAxis);
 
     function makeAxisLabel(text, color) {
@@ -359,7 +328,7 @@
       tex.colorSpace = THREE.SRGBColorSpace;
       const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
       const sprite = new THREE.Sprite(mat);
-      sprite.scale.set(CONFIG.axis.labelSize, CONFIG.axis.labelSize, 1);
+      sprite.scale.set(CONFIG.WORLD.axis.labelSize, CONFIG.WORLD.axis.labelSize, 1);
       return sprite;
     }
 
@@ -367,9 +336,9 @@
     const labelY = makeAxisLabel('Y', '#44ff44');
     const labelZ = makeAxisLabel('Z', '#4444ff');
 
-    labelX.position.copy(axisOrigin).add(new THREE.Vector3(CONFIG.axis.labelOffset, 0, 0));
-    labelY.position.copy(axisOrigin).add(new THREE.Vector3(0, CONFIG.axis.labelOffset, 0));
-    labelZ.position.copy(axisOrigin).add(new THREE.Vector3(0, 0, CONFIG.axis.labelOffset));
+    labelX.position.copy(axisOrigin).add(new THREE.Vector3(CONFIG.WORLD.axis.labelOffset, 0, 0));
+    labelY.position.copy(axisOrigin).add(new THREE.Vector3(0, CONFIG.WORLD.axis.labelOffset, 0));
+    labelZ.position.copy(axisOrigin).add(new THREE.Vector3(0, 0, CONFIG.WORLD.axis.labelOffset));
 
     scene.add(labelX, labelY, labelZ);
 
@@ -378,7 +347,7 @@
     const floorTexture = textureLoader.load('./golf_course.png');
     floorTexture.colorSpace = THREE.SRGBColorSpace;
 
-    const floorGeometry = new THREE.PlaneGeometry(CONFIG.floor.size, CONFIG.floor.size);
+    const floorGeometry = new THREE.PlaneGeometry(CONFIG.WORLD.floor.size, CONFIG.WORLD.floor.size);
     const floorMaterial = new THREE.MeshStandardMaterial({
       map: floorTexture,
       roughness: 0.9,
@@ -391,15 +360,15 @@
     scene.add(floor);
 
     // ========== HOWITZER ==========
-    const howitzerData = createHowitzer(scene, CONFIG.cannon);
+    const howitzerData = createHowitzer(scene, CONFIG.buildCannonConfig(gameSession.currentHole));
     const firingAnim = createFiringAnimation();
     const cannonControls = createCannonControls(howitzerData);
     const projectileSystem = createProjectileSystem(scene, howitzerData, firingAnim);
 
     // ========== CAMERA CONTROLS ==========
-    let yaw = THREE.MathUtils.degToRad(CONFIG.camera.initialYawDeg);
-    let pitch = THREE.MathUtils.degToRad(CONFIG.camera.initialPitchDeg);
-    const maxPitch = THREE.MathUtils.degToRad(CONFIG.controls.maxPitchDeg);
+    let yaw = THREE.MathUtils.degToRad(CONFIG.CAMERA.initialYawDeg);
+    let pitch = THREE.MathUtils.degToRad(CONFIG.CAMERA.initialPitchDeg);
+    const maxPitch = THREE.MathUtils.degToRad(CONFIG.CONTROLS.maxPitchDeg);
 
     function applyCameraOrientation() {
       camera.rotation.y = yaw;
@@ -408,10 +377,7 @@
     applyCameraOrientation();
 
     // ========== DRONE SYSTEM ==========
-    const droneSystem = createDroneSystem(camera, renderer, {
-      ...CONFIG.drone,
-      cannonPosition: CONFIG.cannon.position
-    });
+    const droneSystem = createDroneSystem(camera, renderer, CONFIG.buildDroneConfig(gameSession.currentHole));
     const droneSpeedInput = document.getElementById('droneSpeedInput');
     const droneHeightInput = document.getElementById('droneHeightInput');
 
@@ -446,7 +412,7 @@
     }
 
     // ========== CANNON LOADING CONFIG ==========
-    const CANNON_LOAD_DISTANCE = 3.5; // Distance threshold to load cannon
+    const CANNON_LOAD_DISTANCE = CONFIG.CANNON.loadDistance;
 
     // ========== GAME STATE MACHINE ==========
     const gameState = createGameState({
@@ -606,8 +572,8 @@
       lastMouseX = event.clientX;
       lastMouseY = event.clientY;
 
-      yaw -= dx * CONFIG.controls.lookSensitivity;
-      pitch -= dy * CONFIG.controls.lookSensitivity;
+      yaw -= dx * CONFIG.CONTROLS.lookSensitivity;
+      pitch -= dy * CONFIG.CONTROLS.lookSensitivity;
       pitch = THREE.MathUtils.clamp(pitch, -maxPitch, maxPitch);
       applyCameraOrientation();
     });
@@ -698,7 +664,7 @@
 
       // Determine speed and flying mode based on drone state
       const isDroneActive = droneSystem.isActive();
-      const currentSpeed = isDroneActive ? droneSystem.getSpeed() : CONFIG.controls.moveSpeed;
+      const currentSpeed = isDroneActive ? droneSystem.getSpeed() : CONFIG.CONTROLS.moveSpeed;
 
       if (moveForward !== 0 || moveRight !== 0) {
         camera.getWorldDirection(forwardVector);
