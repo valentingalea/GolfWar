@@ -251,6 +251,7 @@
     import { setupRenderer, createLighting } from './lighting.js';
     import { createSkybox, createSun, setupHourControl } from './sun.js';
     import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createProjectileSystem } from './cannon.js';
+    import { createFlag, positionFlag } from './flag.js';
     import { createDroneSystem } from './drone.js';
     import { createFirstPersonHands } from './hands.js';
     import { createMobileControls, isMobileDevice } from './mobile-controls.js';
@@ -389,6 +390,12 @@
     const firingAnim = createFiringAnimation();
     const cannonControls = createCannonControls(howitzerData);
     const projectileSystem = createProjectileSystem(scene, howitzerData, firingAnim);
+
+    // ========== FLAG ==========
+    const flag = createFlag(CONFIG.FLAG);
+    const flagPos = CONFIG.getFlagPosition(gameSession.currentHole);
+    positionFlag(flag, flagPos);
+    scene.add(flag);
 
     // ========== CAMERA CONTROLS ==========
     let yaw = THREE.MathUtils.degToRad(CONFIG.CAMERA.initialYawDeg);

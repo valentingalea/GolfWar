@@ -32,6 +32,7 @@ This folder contains a Three.js web prototype for an artillery golf game. The pl
 | `terrain.js` | Procedural terrain mesh generation |
 | `terrain-heightmap.js` | Heightmap-based terrain (alternative) |
 | `trees.js` | Procedural tree placement system |
+| `flag.js` | Golf flag marker at hole position (scaled up for drone visibility) |
 
 ### Player & UI
 

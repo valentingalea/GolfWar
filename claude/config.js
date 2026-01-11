@@ -120,6 +120,7 @@ export const SMOKE = {
 
 // ========== FLAG/TARGET SETTINGS ==========
 export const FLAG = {
+  scale: 4,               // Overall scale factor (for drone visibility)
   poleHeight: 2.0,
   poleRadius: 0.02,
   flagWidth: 0.6,
