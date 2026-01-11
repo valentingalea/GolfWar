@@ -649,13 +649,16 @@
         gameState.cycleNext();
       }
 
-      // Direct stage access (1-6)
-      if (event.code === 'Digit1') gameState.goToStage(0);
-      if (event.code === 'Digit2') gameState.goToStage(1);
-      if (event.code === 'Digit3') gameState.goToStage(2);
-      if (event.code === 'Digit4') gameState.goToStage(3);
-      if (event.code === 'Digit5') gameState.goToStage(4); // Blocked by state machine
-      if (event.code === 'Digit6') gameState.goToStage(5);
+      // Direct stage access (1-6) - skip if typing in input field
+      const isTypingInInput = document.activeElement && document.activeElement.tagName === 'INPUT';
+      if (!isTypingInInput) {
+        if (event.code === 'Digit1') gameState.goToStage(0);
+        if (event.code === 'Digit2') gameState.goToStage(1);
+        if (event.code === 'Digit3') gameState.goToStage(2);
+        if (event.code === 'Digit4') gameState.goToStage(3);
+        if (event.code === 'Digit5') gameState.goToStage(4); // Blocked by state machine
+        if (event.code === 'Digit6') gameState.goToStage(5);
+      }
 
       // Action trigger
       if (event.code === 'KeyF') {
