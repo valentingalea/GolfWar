@@ -226,13 +226,13 @@
       </div>
       <div class="hud-row">
         <label class="hud-label" style="cursor:pointer;">
-          <input type="checkbox" id="autoFollowShot" style="margin-right:6px;" checked />
+          <input type="checkbox" id="autoFollowShot" style="margin-right:6px;" />
           Auto-follow shot
         </label>
       </div>
       <div class="hud-row">
         <span class="hud-label">Follow Delay</span>
-        <input id="autoFollowDelay" class="hud-input" type="number" value="2" min="0" max="10" step="0.5" />
+        <input id="autoFollowDelay" class="hud-input" type="number" min="0" max="10" step="0.5" />
         <span class="hud-unit">sec</span>
       </div>
     </div>
@@ -681,6 +681,10 @@
     if (CONFIG.UI.showLightingControls) {
       document.getElementById('debug-lighting').style.display = 'block';
     }
+
+    // Initialize auto-follow settings from config
+    document.getElementById('autoFollowShot').checked = CONFIG.AUTO_FOLLOW.enabled;
+    document.getElementById('autoFollowDelay').value = CONFIG.AUTO_FOLLOW.delaySec;
 
     // ========== ANIMATION LOOP ==========
     const clock = new THREE.Clock();

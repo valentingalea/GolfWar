@@ -68,13 +68,13 @@ export const CONTROLS = {
 
 // ========== DRONE SETTINGS ==========
 export const DRONE = {
-  defaultSpeed: 50,       // Flying speed in m/s
+  defaultSpeed: 30,       // Flying speed in m/s
   minSpeed: 10,
   maxSpeed: 500,
-  transitionSpeed: 15,    // Speed during transition animation (m/s), 0 = instant
+  transitionSpeed: 5,    // Speed during transition animation (m/s), 0 = instant
   minTransitionSpeed: 0,
   maxTransitionSpeed: 100,
-  startHeight: 25,        // Height above ground when activating drone
+  startHeight: 15,        // Height above ground when activating drone
   startOffset: { x: -3, z: 5 }  // Offset from cannon when entering drone mode
 };
 
@@ -135,6 +135,12 @@ export const UI = {
   showLightingControls: false,  // Hour and Lock Lighting debug options
   mobileStageBarTop: 10,
   hudPadding: 12
+};
+
+// ========== AUTO-FOLLOW SETTINGS ==========
+export const AUTO_FOLLOW = {
+  enabled: true,          // Auto-switch to drone view after firing
+  delaySec: 1             // Delay before switching to drone view
 };
 
 // ========== HELPER FUNCTIONS ==========
