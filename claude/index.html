@@ -92,33 +92,36 @@
     /* Mobile styles */
     @media (max-width: 768px), (pointer: coarse) {
       #hud {
-        left: 50%;
-        transform: translateX(-50%);
-        top: 10px;
-        padding: 8px 12px;
-        font-size: 11px;
+        left: 10px;
+        transform: none;
+        top: 70px;
+        padding: 8px 10px;
+        font-size: 10px;
         min-width: auto;
-        max-width: 90vw;
-        gap: 4px;
+        max-width: 160px;
+        gap: 3px;
       }
       .hud-row {
-        gap: 4px;
+        gap: 3px;
       }
       .hud-input {
-        width: 50px;
-        padding: 3px 4px;
-        font-size: 11px;
-      }
-      .hud-btn {
-        width: 24px;
-        height: 24px;
-        font-size: 12px;
-      }
-      .hud-value {
-        min-width: 40px;
+        width: 45px;
+        padding: 2px 3px;
         font-size: 10px;
       }
+      .hud-btn {
+        width: 22px;
+        height: 22px;
+        font-size: 11px;
+      }
+      .hud-value {
+        min-width: 35px;
+        font-size: 9px;
+      }
       .hud-unit {
+        font-size: 8px;
+      }
+      .hud-label {
         font-size: 9px;
       }
       /* Hide verbose debug info on mobile */
@@ -130,10 +133,6 @@
       /* Hide divider after stage row */
       .hud-row:has(#stageValue) + .hud-divider {
         display: none;
-      }
-      /* Push HUD down below mobile stage bar */
-      #hud {
-        top: 60px;
       }
     }
 
