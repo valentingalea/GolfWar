@@ -171,6 +171,15 @@
       </div>
       <div class="hud-divider"></div>
       <div class="hud-row">
+        <span class="hud-label">Ball Distance</span>
+        <span id="ballDistValue" class="hud-value hud-readonly" style="min-width: 90px;">--</span>
+      </div>
+    </div>
+
+    <!-- Lighting controls (conditionally shown via config) -->
+    <div id="debug-lighting" style="display: none;">
+      <div class="hud-divider"></div>
+      <div class="hud-row">
         <span class="hud-label">Hour</span>
         <input id="hourInput" class="hud-input" type="number" value="12" min="0" max="24" step="0.5" />
         <span id="hourDisplay" class="hud-unit">12:00</span>
@@ -660,6 +669,12 @@
     // HUD elements
     const camPosValue = document.getElementById('camPosValue');
     const camRotValue = document.getElementById('camRotValue');
+    const ballDistValue = document.getElementById('ballDistValue');
+
+    // Show/hide lighting controls based on config
+    if (CONFIG.UI.showLightingControls) {
+      document.getElementById('debug-lighting').style.display = 'block';
+    }
 
     // ========== ANIMATION LOOP ==========
     const clock = new THREE.Clock();
@@ -741,6 +756,15 @@
       const yawDeg = THREE.MathUtils.radToDeg(yaw).toFixed(0);
       const pitchDeg = THREE.MathUtils.radToDeg(pitch).toFixed(0);
       camRotValue.textContent = `${yawDeg}°, ${pitchDeg}°`;
+
+      // Update ball distance display (meters and yards)
+      const ballDist = projectileSystem.getBallDistance();
+      if (ballDist !== null) {
+        const yards = ballDist * 1.09361;
+        ballDistValue.textContent = `${ballDist.toFixed(1)}m / ${yards.toFixed(1)}yd`;
+      } else {
+        ballDistValue.textContent = '--';
+      }
 
       renderer.render(scene, camera);
     }

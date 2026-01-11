@@ -131,6 +131,7 @@ export const FLAG = {
 // ========== UI SETTINGS ==========
 export const UI = {
   debugPanelVisible: true,
+  showLightingControls: false,  // Hour and Lock Lighting debug options
   mobileStageBarTop: 10,
   hudPadding: 12
 };

@@ -534,7 +534,8 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
       smokeTimer: 0,
       state: 'flying',      // flying, rolling, stopped
       bounceCount: 0,
-      notifiedStabilized: false
+      notifiedStabilized: false,
+      launchPosition: muzzleWorld.clone()  // Track launch position for distance calculation
     });
 
     // Unload cannon after firing
@@ -709,6 +710,16 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
     // Get cannon world position for distance checks
     getCannonPosition() {
       return howitzer.group.position.clone();
+    },
+    // Get ball floor distance (horizontal distance from launch position)
+    getBallDistance() {
+      if (projectiles.length === 0) return null;
+      const proj = projectiles[projectiles.length - 1]; // Most recent projectile
+      if (!proj.launchPosition) return null;
+      // Calculate floor (XZ) distance only
+      const dx = proj.mesh.position.x - proj.launchPosition.x;
+      const dz = proj.mesh.position.z - proj.launchPosition.z;
+      return Math.sqrt(dx * dx + dz * dz);
     }
   };
 }
