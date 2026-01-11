@@ -198,35 +198,52 @@ function createButtonBoxModel() {
   return group;
 }
 
-// Placeholder model for Move To Next Shot stage
-function createPlaceholderModel() {
+// Move marker model for Move To Next Shot stage (arrow/flag icon)
+function createMoveMarkerModel() {
   const group = new THREE.Group();
 
-  // Simple cube with question mark texture idea
-  const cubeGeom = new THREE.BoxGeometry(0.04, 0.04, 0.04);
-  const cubeMat = new THREE.MeshStandardMaterial({
-    color: 0x666688,
-    roughness: 0.5,
-    metalness: 0.3
+  // Flag pole
+  const poleGeom = new THREE.CylinderGeometry(0.003, 0.003, 0.08, 8);
+  const poleMat = new THREE.MeshStandardMaterial({
+    color: 0xcccccc,
+    roughness: 0.3,
+    metalness: 0.2
   });
-  const cube = new THREE.Mesh(cubeGeom, cubeMat);
-  group.add(cube);
+  const pole = new THREE.Mesh(poleGeom, poleMat);
+  pole.position.y = 0.02;
+  group.add(pole);
 
-  // Arrow pointing forward
-  const arrowShaftGeom = new THREE.BoxGeometry(0.008, 0.008, 0.04);
-  const arrowMat = new THREE.MeshStandardMaterial({ color: 0x88ff88 });
-  const shaft = new THREE.Mesh(arrowShaftGeom, arrowMat);
-  shaft.position.z = 0.03;
-  group.add(shaft);
+  // Flag (triangular)
+  const flagShape = new THREE.Shape();
+  flagShape.moveTo(0, 0);
+  flagShape.lineTo(0.04, 0.015);
+  flagShape.lineTo(0, 0.03);
+  flagShape.lineTo(0, 0);
 
-  // Arrow head
-  const arrowHeadGeom = new THREE.ConeGeometry(0.012, 0.02, 6);
-  const head = new THREE.Mesh(arrowHeadGeom, arrowMat);
-  head.position.z = 0.06;
-  head.rotation.x = Math.PI / 2;
-  group.add(head);
+  const flagGeom = new THREE.ShapeGeometry(flagShape);
+  const flagMat = new THREE.MeshStandardMaterial({
+    color: 0x44cc44,
+    roughness: 0.6,
+    side: THREE.DoubleSide
+  });
+  const flag = new THREE.Mesh(flagGeom, flagMat);
+  flag.position.set(0.003, 0.03, 0);
+  flag.rotation.y = Math.PI / 2;
+  group.add(flag);
 
-  group.scale.setScalar(1.3);
+  // Base ring
+  const ringGeom = new THREE.TorusGeometry(0.015, 0.003, 8, 16);
+  const ringMat = new THREE.MeshStandardMaterial({
+    color: 0x44cc44,
+    roughness: 0.4
+  });
+  const ring = new THREE.Mesh(ringGeom, ringMat);
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = -0.02;
+  group.add(ring);
+
+  group.scale.setScalar(1.5);
+  group.rotation.x = -0.2; // Tilt slightly towards camera
 
   return group;
 }
@@ -238,7 +255,7 @@ export function createHandObjects() {
     'sphere': createSphereModel(),
     'wrench': createWrenchModel(),
     'button-box': createButtonBoxModel(),
-    'placeholder': createPlaceholderModel()
+    'move-marker': createMoveMarkerModel()
   };
 }
 

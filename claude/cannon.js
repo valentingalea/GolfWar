@@ -720,6 +720,39 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
       const dx = proj.mesh.position.x - proj.launchPosition.x;
       const dz = proj.mesh.position.z - proj.launchPosition.z;
       return Math.sqrt(dx * dx + dz * dz);
+    },
+    // Get ball position (most recent projectile)
+    getBallPosition() {
+      if (projectiles.length === 0) return null;
+      const proj = projectiles[projectiles.length - 1];
+      return proj.mesh.position.clone();
+    },
+    // Check if ball has stabilized (stopped moving)
+    isBallStabilized() {
+      if (projectiles.length === 0) return false;
+      const proj = projectiles[projectiles.length - 1];
+      return proj.state === 'stopped';
+    },
+    // Clear all projectiles from scene
+    clearProjectiles() {
+      for (const proj of projectiles) {
+        scene.remove(proj.mesh);
+        // Clear smoke trail if exists
+        if (proj.smokeParticles) {
+          for (const particle of proj.smokeParticles) {
+            scene.remove(particle);
+          }
+        }
+      }
+      projectiles.length = 0;
+    },
+    // Move cannon to new position
+    setCannonPosition(pos) {
+      howitzer.group.position.set(pos.x, pos.y, pos.z);
+    },
+    // Get howitzer group for external access
+    getHowitzerGroup() {
+      return howitzer.group;
     }
   };
 }

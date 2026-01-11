@@ -57,11 +57,11 @@ const STAGES = [
     id: 'move-next',
     index: 5,
     name: 'Move To Next Shot',
-    handObject: 'placeholder',
+    handObject: 'move-marker',
     debugSection: null,
     gameUI: null,
     canCycle: true,
-    action: null
+    action: 'moveToNextShot'
   }
 ];
 
@@ -163,6 +163,11 @@ export function createGameState(callbacks) {
         break;
       case 'exitDroneView':
         setStage(0); // Return to Idle
+        break;
+      case 'moveToNextShot':
+        if (callbacks.moveToNextShot) {
+          callbacks.moveToNextShot();
+        }
         break;
       default:
         // Placeholder or no action

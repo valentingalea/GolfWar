@@ -122,6 +122,23 @@
       color: rgba(255,255,255,0.5);
     }
 
+    /* Screen fade overlay for transitions */
+    #screen-fade {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 9999;
+      transition: opacity 0.4s ease-in-out;
+    }
+    #screen-fade.active {
+      opacity: 1;
+    }
+
     /* Mobile styles */
     @media (max-width: 768px), (pointer: coarse) {
       #hud {
@@ -198,6 +215,9 @@
   </script>
 </head>
 <body>
+  <!-- Screen fade overlay for transitions -->
+  <div id="screen-fade"></div>
+
   <!-- Scoring Panel - top right -->
   <div id="scoring-panel">
     <div id="scoring-hole">Hole <span class="hole-current">1</span> / 9</div>
@@ -633,6 +653,68 @@
             }, delaySec * 1000);
           }
         }
+      },
+
+      moveToNextShot: () => {
+        // Only allow if ball has stabilized
+        if (!projectileSystem.isBallStabilized()) {
+          return; // Ball hasn't landed yet
+        }
+
+        const ballPos = projectileSystem.getBallPosition();
+        if (!ballPos) return;
+
+        const screenFade = document.getElementById('screen-fade');
+        const FADE_DURATION = 400; // ms, matches CSS transition
+
+        // Start fade to black
+        screenFade.classList.add('active');
+
+        // After fade completes, do the move
+        setTimeout(() => {
+          // Get current cannon position to calculate offset
+          const oldCannonPos = projectileSystem.getCannonPosition();
+
+          // Calculate player offset from cannon
+          const playerOffsetX = camera.position.x - oldCannonPos.x;
+          const playerOffsetY = camera.position.y - oldCannonPos.y;
+          const playerOffsetZ = camera.position.z - oldCannonPos.z;
+
+          // Move cannon to ball position (keep Y at ground level)
+          const newCannonPos = {
+            x: ballPos.x,
+            y: 0,
+            z: ballPos.z
+          };
+          projectileSystem.setCannonPosition(newCannonPos);
+
+          // Move player maintaining offset from cannon
+          camera.position.set(
+            newCannonPos.x + playerOffsetX,
+            newCannonPos.y + playerOffsetY,
+            newCannonPos.z + playerOffsetZ
+          );
+
+          // Clear projectiles (delete the ball)
+          projectileSystem.clearProjectiles();
+
+          // Reset shot count for this position (continuing same hole)
+          // Note: shotCount is NOT reset - it accumulates for the hole
+
+          // Update ball distance display
+          if (ballDistValue) {
+            ballDistValue.textContent = '--';
+          }
+
+          // Go back to idle stage
+          gameState.goToStage(0, true);
+
+          // Fade back in
+          setTimeout(() => {
+            screenFade.classList.remove('active');
+          }, 100); // Small delay before fading back
+
+        }, FADE_DURATION);
       }
     });
 
