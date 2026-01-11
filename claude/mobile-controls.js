@@ -75,8 +75,8 @@ export function createMobileControls() {
     left: 10px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
+    gap: 4px;
+    padding: 5px 8px;
     border-radius: 8px;
     background: rgba(0, 0, 0, 0.7);
     border: 1px solid rgba(255, 255, 255, 0.2);
@@ -89,13 +89,13 @@ export function createMobileControls() {
   prevStageBtn.id = 'mobile-prev-stage';
   prevStageBtn.innerHTML = '&#9664;'; // Left triangle
   prevStageBtn.style.cssText = `
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     background: rgba(100, 100, 100, 0.8);
     border: 2px solid rgba(255, 255, 255, 0.4);
     color: white;
-    font-size: 16px;
+    font-size: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -109,28 +109,42 @@ export function createMobileControls() {
   stageDisplay.id = 'mobile-stage-display';
   stageDisplay.textContent = 'Idle';
   stageDisplay.style.cssText = `
-    min-width: 90px;
+    min-width: 50px;
+    max-width: 70px;
     text-align: center;
-    padding: 4px 8px;
+    padding: 4px 6px;
     color: white;
     font-family: monospace;
-    font-size: 11px;
+    font-size: 10px;
+    line-height: 1.2;
     user-select: none;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
   `;
   stageBar.appendChild(stageDisplay);
+
+  // Short stage names for mobile
+  const shortStageNames = {
+    'Idle': 'Idle',
+    'Setup Projectile': 'Setup Ball',
+    'Adjust Cannon': 'Aim',
+    'Fire Cannon': 'Fire',
+    'Drone View': 'Drone',
+    'Move To Next Shot': 'Next'
+  };
 
   // Stage cycling - next stage button (right arrow)
   const nextStageBtn = document.createElement('div');
   nextStageBtn.id = 'mobile-next-stage';
   nextStageBtn.innerHTML = '&#9654;'; // Right triangle
   nextStageBtn.style.cssText = `
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     background: rgba(100, 100, 100, 0.8);
     border: 2px solid rgba(255, 255, 255, 0.4);
     color: white;
-    font-size: 16px;
+    font-size: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -142,10 +156,10 @@ export function createMobileControls() {
   // Action button (green, part of the bar)
   const actionBtn = document.createElement('div');
   actionBtn.id = 'mobile-action-btn';
-  actionBtn.textContent = 'ACTION';
+  actionBtn.textContent = 'GO';
   actionBtn.style.cssText = `
     margin-left: 6px;
-    padding: 8px 14px;
+    padding: 8px 12px;
     border-radius: 8px;
     background: rgba(60, 180, 60, 0.8);
     border: 2px solid rgba(100, 220, 100, 0.8);
@@ -324,9 +338,9 @@ export function createMobileControls() {
       actionBtn.style.display = 'flex';
       stageDisplay.style.display = 'block';
     },
-    // Update stage display
+    // Update stage display (uses short names for mobile)
     setStageDisplay(stageName) {
-      stageDisplay.textContent = stageName;
+      stageDisplay.textContent = shortStageNames[stageName] || stageName;
     },
     // Show/hide mobile UI
     setVisible(visible) {

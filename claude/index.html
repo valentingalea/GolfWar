@@ -89,6 +89,39 @@
       /* Stage-specific debug UI sections */
     }
 
+    /* Scoring panel - top right */
+    #scoring-panel {
+      position: fixed;
+      right: 16px;
+      top: 16px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      font-family: monospace;
+      text-align: center;
+      min-width: 100px;
+    }
+    #scoring-hole {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    #scoring-hole .hole-current {
+      color: #8cf;
+    }
+    #scoring-shots {
+      font-size: 14px;
+      color: rgba(255,255,255,0.8);
+    }
+    #scoring-shots .shots-current {
+      color: #fc8;
+    }
+    #scoring-shots .shots-par {
+      color: rgba(255,255,255,0.5);
+    }
+
     /* Mobile styles */
     @media (max-width: 768px), (pointer: coarse) {
       #hud {
@@ -134,6 +167,19 @@
       .hud-row:has(#stageValue) + .hud-divider {
         display: none;
       }
+      /* Mobile scoring panel */
+      #scoring-panel {
+        right: 10px;
+        top: 10px;
+        padding: 8px 12px;
+        min-width: 80px;
+      }
+      #scoring-hole {
+        font-size: 14px;
+      }
+      #scoring-shots {
+        font-size: 11px;
+      }
     }
 
     /* Prevent text selection and callouts on mobile */
@@ -152,6 +198,12 @@
   </script>
 </head>
 <body>
+  <!-- Scoring Panel - top right -->
+  <div id="scoring-panel">
+    <div id="scoring-hole">Hole <span class="hole-current">1</span> / 9</div>
+    <div id="scoring-shots">Shots: <span class="shots-current">0</span> <span class="shots-par">/ Par 3</span></div>
+  </div>
+
   <div id="hud">
     <!-- Shared Debug UI (always visible) -->
     <div id="debug-shared">
@@ -265,6 +317,26 @@
       shotCount: 0,
       scores: []  // Array of { hole, shots, par }
     };
+
+    // ========== SCORING UI ==========
+    function updateScoringUI() {
+      const hole = CONFIG.getHole(gameSession.currentHole);
+      const totalHoles = CONFIG.COURSE.holeCount;
+
+      // Update hole display
+      const holeCurrentEl = document.querySelector('#scoring-hole .hole-current');
+      const holeContainer = document.getElementById('scoring-hole');
+      if (holeCurrentEl && holeContainer) {
+        holeCurrentEl.textContent = gameSession.currentHole;
+        holeContainer.innerHTML = `Hole <span class="hole-current">${gameSession.currentHole}</span> / ${totalHoles}`;
+      }
+
+      // Update shots display
+      const shotsContainer = document.getElementById('scoring-shots');
+      if (shotsContainer) {
+        shotsContainer.innerHTML = `Shots: <span class="shots-current">${gameSession.shotCount}</span> <span class="shots-par">/ Par ${hole.par}</span>`;
+      }
+    }
 
     // ========== RENDERER & SCENE ==========
     const renderer = setupRenderer();
@@ -543,6 +615,12 @@
         // Only actually fire if loaded (fire returns false if not loaded)
         const fired = projectileSystem.fire();
 
+        // Increment shot count and update UI on successful fire
+        if (fired) {
+          gameSession.shotCount++;
+          updateScoringUI();
+        }
+
         // Auto-follow: switch to drone view after successful fire (with delay)
         if (fired) {
           const autoFollowCheckbox = document.getElementById('autoFollowShot');
@@ -781,6 +859,10 @@
 
       renderer.render(scene, camera);
     }
+
+    // Initialize scoring UI
+    updateScoringUI();
+
     animate();
 
     // Handle window resize
