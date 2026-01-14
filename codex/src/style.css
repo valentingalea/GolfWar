@@ -149,6 +149,12 @@ body {
   width: 100%;
 }
 
+.control.file input[type="file"] {
+  grid-column: 1 / span 2;
+  width: 100%;
+  color: var(--muted);
+}
+
 .control .value {
   font-family: "Space Mono", monospace;
   color: #fff;

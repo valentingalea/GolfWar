@@ -10,7 +10,19 @@ const falloffInput = document.querySelector('#brush-falloff')
 const sizeValue = document.querySelector('#brush-size-value')
 const strengthValue = document.querySelector('#brush-strength-value')
 const falloffValue = document.querySelector('#brush-falloff-value')
-const toolButtons = document.querySelectorAll('.tool-button')
+const toolButtons = document.querySelectorAll('[data-tool]')
+const overlayModeButtons = document.querySelectorAll('[data-overlay-mode]')
+const referenceInput = document.querySelector('#reference-image')
+const referenceOpacity = document.querySelector('#reference-opacity')
+const referenceOpacityValue = document.querySelector('#reference-opacity-value')
+const referenceScale = document.querySelector('#reference-scale')
+const referenceScaleValue = document.querySelector('#reference-scale-value')
+const referenceRotation = document.querySelector('#reference-rotation')
+const referenceRotationValue = document.querySelector('#reference-rotation-value')
+const referenceOffsetX = document.querySelector('#reference-offset-x')
+const referenceOffsetXValue = document.querySelector('#reference-offset-x-value')
+const referenceOffsetZ = document.querySelector('#reference-offset-z')
+const referenceOffsetZValue = document.querySelector('#reference-offset-z-value')
 const wireframeToggle = document.querySelector('#wireframe-toggle')
 const resetButton = document.querySelector('#reset-terrain')
 const resolutionSelect = document.querySelector('#terrain-resolution')
@@ -51,6 +63,7 @@ scene.add(gridHelper)
 const raycaster = new THREE.Raycaster()
 const pointer = new THREE.Vector2()
 
+const terrainSize = 220
 const state = {
   tool: 'sculpt',
   brushSize: Number(sizeInput.value),
@@ -65,6 +78,19 @@ const state = {
 }
 
 let terrain = null
+let overlayProjected = null
+let overlayFlat = null
+let overlayTexture = null
+let overlayObjectUrl = null
+
+const overlayState = {
+  mode: 'projected',
+  opacity: Number(referenceOpacity.value),
+  scale: Number(referenceScale.value),
+  rotation: Number(referenceRotation.value),
+  offsetX: Number(referenceOffsetX.value),
+  offsetZ: Number(referenceOffsetZ.value)
+}
 
 const brushRing = createBrushRing()
 scene.add(brushRing)
@@ -90,8 +116,12 @@ function buildTerrain(segments) {
     terrain.mesh.geometry.dispose()
     terrain.mesh.material.dispose()
   }
+  if (overlayProjected) {
+    scene.remove(overlayProjected)
+    overlayProjected.material.dispose()
+  }
 
-  const geometry = new THREE.PlaneGeometry(220, 220, segments, segments)
+  const geometry = new THREE.PlaneGeometry(terrainSize, terrainSize, segments, segments)
   geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
 
@@ -106,6 +136,11 @@ function buildTerrain(segments) {
   mesh.receiveShadow = true
   scene.add(mesh)
 
+  overlayProjected = createOverlayMesh(geometry)
+  overlayProjected.renderOrder = 2
+  overlayProjected.visible = Boolean(overlayTexture) && overlayState.mode === 'projected'
+  scene.add(overlayProjected)
+
   terrain = {
     mesh,
     geometry,
@@ -113,9 +148,31 @@ function buildTerrain(segments) {
     segments,
     grid: segments + 1
   }
+
+  if (overlayTexture) updateOverlayTexture()
 }
 
 buildTerrain(state.segments)
+
+overlayFlat = createOverlayMesh(new THREE.PlaneGeometry(terrainSize, terrainSize, 1, 1))
+overlayFlat.geometry.rotateX(-Math.PI / 2)
+overlayFlat.position.y = 0.4
+overlayFlat.visible = Boolean(overlayTexture) && overlayState.mode === 'flat'
+overlayFlat.renderOrder = 2
+scene.add(overlayFlat)
+
+function createOverlayMesh(geometry) {
+  const material = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: overlayState.opacity,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1
+  })
+  return new THREE.Mesh(geometry, material)
+}
 
 function updatePointer(event) {
   const rect = canvas.getBoundingClientRect()
@@ -226,6 +283,16 @@ toolButtons.forEach((button) => {
   })
 })
 
+overlayModeButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    overlayState.mode = button.dataset.overlayMode
+    overlayModeButtons.forEach((modeButton) => {
+      modeButton.classList.toggle('is-active', modeButton.dataset.overlayMode === overlayState.mode)
+    })
+    updateOverlayMode()
+  })
+})
+
 sizeInput.addEventListener('input', (event) => {
   state.brushSize = Number(event.target.value)
   sizeValue.textContent = event.target.value
@@ -259,6 +326,54 @@ resetButton.addEventListener('click', () => {
   terrain.positions.needsUpdate = true
   terrain.geometry.computeVertexNormals()
   terrain.geometry.attributes.normal.needsUpdate = true
+})
+
+referenceInput.addEventListener('change', (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  if (overlayObjectUrl) {
+    URL.revokeObjectURL(overlayObjectUrl)
+  }
+  overlayObjectUrl = URL.createObjectURL(file)
+  const loader = new THREE.TextureLoader()
+  loader.load(overlayObjectUrl, (texture) => {
+    overlayTexture = texture
+    overlayTexture.wrapS = THREE.RepeatWrapping
+    overlayTexture.wrapT = THREE.RepeatWrapping
+    overlayTexture.anisotropy = renderer.capabilities.getMaxAnisotropy()
+    updateOverlayTexture()
+  })
+})
+
+referenceOpacity.addEventListener('input', (event) => {
+  overlayState.opacity = Number(event.target.value)
+  referenceOpacityValue.textContent = event.target.value
+  updateOverlayMaterial()
+})
+
+referenceScale.addEventListener('input', (event) => {
+  overlayState.scale = Number(event.target.value)
+  referenceScaleValue.textContent = Number(event.target.value).toFixed(1)
+  updateOverlayTexture()
+})
+
+referenceRotation.addEventListener('input', (event) => {
+  overlayState.rotation = Number(event.target.value)
+  referenceRotationValue.textContent = event.target.value
+  updateOverlayTexture()
+})
+
+referenceOffsetX.addEventListener('input', (event) => {
+  overlayState.offsetX = Number(event.target.value)
+  referenceOffsetXValue.textContent = event.target.value
+  updateOverlayTexture()
+})
+
+referenceOffsetZ.addEventListener('input', (event) => {
+  overlayState.offsetZ = Number(event.target.value)
+  referenceOffsetZValue.textContent = event.target.value
+  updateOverlayTexture()
 })
 
 window.addEventListener('pointerdown', (event) => {
@@ -317,6 +432,42 @@ function updateRaycast() {
     state.hasHit = false
   }
   updateBrushRing()
+}
+
+function updateOverlayMaterial() {
+  const opacity = overlayState.opacity
+  if (overlayProjected) overlayProjected.material.opacity = opacity
+  if (overlayFlat) overlayFlat.material.opacity = opacity
+}
+
+function updateOverlayMode() {
+  if (!overlayProjected || !overlayFlat) return
+  const hasTexture = Boolean(overlayTexture)
+  overlayProjected.visible = hasTexture && overlayState.mode === 'projected'
+  overlayFlat.visible = hasTexture && overlayState.mode === 'flat'
+}
+
+function updateOverlayTexture() {
+  if (!overlayTexture || !overlayProjected || !overlayFlat) return
+
+  const scale = overlayState.scale
+  const rotation = THREE.MathUtils.degToRad(overlayState.rotation)
+  const offsetU = overlayState.offsetX / terrainSize
+  const offsetV = overlayState.offsetZ / terrainSize
+  const baseOffset = (1 - 1 / scale) / 2
+
+  overlayTexture.center.set(0.5, 0.5)
+  overlayTexture.rotation = rotation
+  overlayTexture.repeat.set(1 / scale, 1 / scale)
+  overlayTexture.offset.set(baseOffset + offsetU, baseOffset + offsetV)
+  overlayTexture.needsUpdate = true
+
+  overlayProjected.material.map = overlayTexture
+  overlayFlat.material.map = overlayTexture
+  overlayProjected.material.needsUpdate = true
+  overlayFlat.material.needsUpdate = true
+  updateOverlayMaterial()
+  updateOverlayMode()
 }
 
 function animate() {
