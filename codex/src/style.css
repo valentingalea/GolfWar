@@ -1,0 +1,203 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono&display=swap");
+
+:root {
+  color-scheme: light;
+  font-family: "Space Grotesk", sans-serif;
+  background: #0f1014;
+  color: #f2f2f4;
+  --panel-bg: rgba(20, 22, 30, 0.9);
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --accent: #ff8a34;
+  --accent-soft: rgba(255, 138, 52, 0.25);
+  --muted: rgba(242, 242, 244, 0.7);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #1c1f2b 0%, #0d0e13 55%, #050507 100%);
+}
+
+#app {
+  position: relative;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#terrain-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.hud {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.brand {
+  display: grid;
+  gap: 4px;
+}
+
+.brand__title {
+  font-size: clamp(1.4rem, 2.2vw, 2rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.brand__tag {
+  font-family: "Space Mono", monospace;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+.quick-help {
+  display: flex;
+  gap: 16px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.panel {
+  position: absolute;
+  top: 110px;
+  left: 24px;
+  width: min(320px, 90vw);
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  backdrop-filter: blur(14px);
+  z-index: 5;
+}
+
+.panel__section {
+  display: grid;
+  gap: 12px;
+}
+
+.panel__section h2 {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  color: var(--muted);
+}
+
+.tool-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.tool-button,
+.secondary-button {
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.tool-button:hover,
+.secondary-button:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.tool-button.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.control {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 12px;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.control input[type="range"],
+.control select {
+  grid-column: 1 / span 2;
+  width: 100%;
+}
+
+.control .value {
+  font-family: "Space Mono", monospace;
+  color: #fff;
+}
+
+.control.toggle {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.control.toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+.secondary-button {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.panel__footer {
+  font-size: 0.7rem;
+  color: var(--muted);
+  display: grid;
+  gap: 6px;
+}
+
+.panel__footer #status {
+  font-family: "Space Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #fff;
+}
+
+@media (max-width: 900px) {
+  .hud {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .quick-help {
+    flex-wrap: wrap;
+  }
+
+  .panel {
+    top: auto;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+  }
+}
