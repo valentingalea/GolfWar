@@ -24,7 +24,10 @@ const referenceOffsetXValue = document.querySelector('#reference-offset-x-value'
 const referenceOffsetZ = document.querySelector('#reference-offset-z')
 const referenceOffsetZValue = document.querySelector('#reference-offset-z-value')
 const wireframeToggle = document.querySelector('#wireframe-toggle')
+const maxHeightValue = document.querySelector('#max-height-value')
 const resetButton = document.querySelector('#reset-terrain')
+const exportButton = document.querySelector('#export-heightmap')
+const exportFormat = document.querySelector('#export-format')
 const resolutionSelect = document.querySelector('#terrain-resolution')
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
@@ -74,7 +77,8 @@ const state = {
   hasHit: false,
   hitPoint: new THREE.Vector3(),
   flattenHeight: 0,
-  segments: Number(resolutionSelect.value)
+  segments: Number(resolutionSelect.value),
+  maxHeight: 0
 }
 
 let terrain = null
@@ -149,6 +153,7 @@ function buildTerrain(segments) {
     grid: segments + 1
   }
 
+  updateMaxHeight()
   if (overlayTexture) updateOverlayTexture()
 }
 
@@ -267,6 +272,7 @@ function applyBrush() {
   positions.needsUpdate = true
   terrain.geometry.computeVertexNormals()
   terrain.geometry.attributes.normal.needsUpdate = true
+  updateMaxHeight()
 }
 
 function setTool(tool) {
@@ -326,6 +332,38 @@ resetButton.addEventListener('click', () => {
   terrain.positions.needsUpdate = true
   terrain.geometry.computeVertexNormals()
   terrain.geometry.attributes.normal.needsUpdate = true
+  updateMaxHeight()
+})
+
+exportButton.addEventListener('click', () => {
+  if (!terrain) return
+  const grid = terrain.grid
+  const array = terrain.positions.array
+  let payload = null
+  let suffix = 'float32'
+  if (exportFormat.value === 'uint16') {
+    const maxHeight = Math.max(state.maxHeight, 0.0001)
+    const heights = new Uint16Array(grid * grid)
+    for (let i = 0; i < grid * grid; i += 1) {
+      const height = array[i * 3 + 1]
+      const normalized = Math.min(Math.max(height / maxHeight, 0), 1)
+      heights[i] = Math.round(normalized * 65535)
+    }
+    payload = heights
+    suffix = 'uint16'
+  } else {
+    const heights = new Float32Array(grid * grid)
+    for (let i = 0; i < grid * grid; i += 1) {
+      heights[i] = array[i * 3 + 1]
+    }
+    payload = heights
+  }
+  const blob = new Blob([payload.buffer], { type: 'application/octet-stream' })
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = `heightmap_${grid}x${grid}_${suffix}.raw`
+  link.click()
+  URL.revokeObjectURL(link.href)
 })
 
 referenceInput.addEventListener('change', (event) => {
@@ -468,6 +506,18 @@ function updateOverlayTexture() {
   overlayFlat.material.needsUpdate = true
   updateOverlayMaterial()
   updateOverlayMode()
+}
+
+function updateMaxHeight() {
+  if (!terrain) return
+  const array = terrain.positions.array
+  let max = 0
+  for (let i = 0; i < terrain.positions.count; i += 1) {
+    const height = array[i * 3 + 1]
+    if (height > max) max = height
+  }
+  state.maxHeight = max
+  maxHeightValue.textContent = max.toFixed(2)
 }
 
 function animate() {

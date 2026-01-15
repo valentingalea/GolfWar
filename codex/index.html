@@ -57,11 +57,23 @@
               <option value="192">192</option>
             </select>
           </label>
+          <div class="control">
+            <span>Max height</span>
+            <span id="max-height-value" class="value">0.0</span>
+          </div>
           <label class="control toggle">
             <input id="wireframe-toggle" type="checkbox" />
             <span>Wireframe</span>
           </label>
+          <label class="control">
+            <span>Export</span>
+            <select id="export-format">
+              <option value="float32" selected>Float32 raw</option>
+              <option value="uint16">Uint16 raw</option>
+            </select>
+          </label>
           <button id="reset-terrain" class="secondary-button">Reset terrain</button>
+          <button id="export-heightmap" class="secondary-button">Export heightmap</button>
         </div>
         <div class="panel__section">
           <h2>Reference</h2>
