@@ -1,6 +1,14 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import './style.css'
+import {
+  TERRAIN_SIZE,
+  BRUSH_SIZE_RANGE,
+  BRUSH_STRENGTH_SCALE,
+  BRUSH_STRENGTH_STEP,
+  BRUSH_FALLOFF_STEP,
+  HEIGHT_EXPORT_EPSILON
+} from './config.js'
 
 const canvas = document.querySelector('#terrain-canvas')
 const statusEl = document.querySelector('#status')
@@ -66,7 +74,7 @@ scene.add(gridHelper)
 const raycaster = new THREE.Raycaster()
 const pointer = new THREE.Vector2()
 
-const terrainSize = 220
+const terrainSize = TERRAIN_SIZE
 const state = {
   tool: 'sculpt',
   brushSize: Number(sizeInput.value),
@@ -208,7 +216,7 @@ function applyBrush() {
   const vertexCount = positions.count
   const radius = state.brushSize
   const radiusSq = radius * radius
-  const strength = state.brushStrength * 0.12
+  const strength = state.brushStrength * BRUSH_STRENGTH_SCALE
   const falloff = state.brushFalloff
   const center = state.hitPoint
 
@@ -342,7 +350,7 @@ exportButton.addEventListener('click', () => {
   let payload = null
   let suffix = 'float32'
   if (exportFormat.value === 'uint16') {
-    const maxHeight = Math.max(state.maxHeight, 0.0001)
+    const maxHeight = Math.max(state.maxHeight, HEIGHT_EXPORT_EPSILON)
     const heights = new Uint16Array(grid * grid)
     for (let i = 0; i < grid * grid; i += 1) {
       const height = array[i * 3 + 1]
@@ -444,6 +452,49 @@ window.addEventListener('blur', () => {
 window.addEventListener('contextmenu', (event) => {
   if (event.target === canvas) event.preventDefault()
 })
+
+canvas.addEventListener(
+  'wheel',
+  (event) => {
+    if (!event.ctrlKey && !event.shiftKey && !event.altKey) return
+    event.preventDefault()
+    event.stopPropagation()
+    const direction = Math.sign(event.deltaY)
+    if (event.ctrlKey) {
+    const nextValue = Math.min(
+      BRUSH_SIZE_RANGE.max,
+      Math.max(BRUSH_SIZE_RANGE.min, state.brushSize - direction)
+    )
+      if (nextValue === state.brushSize) return
+      state.brushSize = nextValue
+      sizeInput.value = String(nextValue)
+      sizeValue.textContent = String(nextValue)
+      return
+    }
+    if (event.shiftKey) {
+      const step = Number(strengthInput.step) || BRUSH_STRENGTH_STEP
+      const min = Number(strengthInput.min)
+      const max = Number(strengthInput.max)
+      const nextValue = Math.min(max, Math.max(min, state.brushStrength - direction * step))
+      if (nextValue === state.brushStrength) return
+      state.brushStrength = nextValue
+      strengthInput.value = String(nextValue)
+      strengthValue.textContent = String(nextValue.toFixed(1))
+      return
+    }
+    if (event.altKey) {
+      const step = Number(falloffInput.step) || BRUSH_FALLOFF_STEP
+      const min = Number(falloffInput.min)
+      const max = Number(falloffInput.max)
+      const nextValue = Math.min(max, Math.max(min, state.brushFalloff - direction * step))
+      if (nextValue === state.brushFalloff) return
+      state.brushFalloff = nextValue
+      falloffInput.value = String(nextValue)
+      falloffValue.textContent = String(nextValue.toFixed(1))
+    }
+  },
+  { passive: false, capture: true }
+)
 
 window.addEventListener('keydown', (event) => {
   if (event.key === '1') setTool('sculpt')
