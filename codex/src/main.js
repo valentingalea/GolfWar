@@ -7,6 +7,10 @@ import {
   BRUSH_STRENGTH_SCALE,
   BRUSH_STRENGTH_STEP,
   BRUSH_FALLOFF_STEP,
+  BRUSH_PREVIEW_HEIGHT,
+  STRENGTH_RING_MIN_FACTOR,
+  FALLOFF_ARC_DEGREES,
+  FALLOFF_RADIUS_FACTOR,
   HEIGHT_EXPORT_EPSILON
 } from './config.js'
 
@@ -73,6 +77,8 @@ scene.add(gridHelper)
 
 const raycaster = new THREE.Raycaster()
 const pointer = new THREE.Vector2()
+const tempDir = new THREE.Vector3()
+const tempRight = new THREE.Vector3()
 
 const terrainSize = TERRAIN_SIZE
 const state = {
@@ -105,7 +111,9 @@ const overlayState = {
 }
 
 const brushRing = createBrushRing()
-scene.add(brushRing)
+const strengthRing = createStrengthRing()
+const falloffCurve = createFalloffCurve()
+scene.add(brushRing, strengthRing, falloffCurve)
 
 function createBrushRing() {
   const ringSegments = 64
@@ -119,6 +127,33 @@ function createBrushRing() {
   const line = new THREE.LineLoop(geometry, material)
   line.scale.setScalar(state.brushSize)
   line.visible = false
+  return line
+}
+
+function createStrengthRing() {
+  const ringSegments = 64
+  const points = []
+  for (let i = 0; i <= ringSegments; i += 1) {
+    const angle = (i / ringSegments) * Math.PI * 2
+    points.push(new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)))
+  }
+  const geometry = new THREE.BufferGeometry().setFromPoints(points)
+  const material = new THREE.LineBasicMaterial({ color: 0x7cf7ff, transparent: true, opacity: 0.7 })
+  const line = new THREE.LineLoop(geometry, material)
+  line.scale.setScalar(state.brushSize * 0.4)
+  line.visible = false
+  return line
+}
+
+function createFalloffCurve() {
+  const segments = 128
+  const positions = new Float32Array((segments + 1) * 3)
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  const material = new THREE.LineBasicMaterial({ color: 0xffd36e, transparent: true, opacity: 0.85 })
+  const line = new THREE.Line(geometry, material)
+  line.visible = false
+  line.userData.segments = segments
   return line
 }
 
@@ -196,12 +231,19 @@ function updatePointer(event) {
 function updateBrushRing() {
   if (!state.hasHit) {
     brushRing.visible = false
+    strengthRing.visible = false
+    falloffCurve.visible = false
     return
   }
   brushRing.visible = true
+  strengthRing.visible = true
+  falloffCurve.visible = true
   brushRing.position.copy(state.hitPoint)
   brushRing.position.y += 0.2
   brushRing.scale.setScalar(state.brushSize)
+
+  updateStrengthRing()
+  updateFalloffCurve()
 }
 
 function lerp(a, b, t) {
@@ -281,6 +323,40 @@ function applyBrush() {
   terrain.geometry.computeVertexNormals()
   terrain.geometry.attributes.normal.needsUpdate = true
   updateMaxHeight()
+}
+
+function updateStrengthRing() {
+  const maxStrength = Number(strengthInput.max) || 1
+  const ratio = Math.max(STRENGTH_RING_MIN_FACTOR, state.brushStrength / maxStrength)
+  const radius = state.brushSize * ratio
+  strengthRing.position.copy(state.hitPoint)
+  strengthRing.position.y += 0.15
+  strengthRing.scale.setScalar(radius)
+}
+
+function updateFalloffCurve() {
+  const segments = falloffCurve.userData.segments
+  const positions = falloffCurve.geometry.attributes.position.array
+  falloffCurve.position.copy(state.hitPoint)
+  falloffCurve.position.y += 0.25
+  tempDir.set(camera.position.x - state.hitPoint.x, 0, camera.position.z - state.hitPoint.z).normalize()
+  tempRight.set(-tempDir.z, 0, tempDir.x)
+  const arc = THREE.MathUtils.degToRad(FALLOFF_ARC_DEGREES)
+  const startAngle = -arc / 2
+  const radius = state.brushSize * FALLOFF_RADIUS_FACTOR
+  for (let i = 0; i <= segments; i += 1) {
+    const t = i / segments
+    const angle = startAngle + arc * t
+    const influence = Math.pow(1 - t, state.brushFalloff)
+    const height = influence * BRUSH_PREVIEW_HEIGHT
+    const dirX = tempDir.x * Math.cos(angle) + tempRight.x * Math.sin(angle)
+    const dirZ = tempDir.z * Math.cos(angle) + tempRight.z * Math.sin(angle)
+    const index = i * 3
+    positions[index] = dirX * radius
+    positions[index + 1] = height
+    positions[index + 2] = dirZ * radius
+  }
+  falloffCurve.geometry.attributes.position.needsUpdate = true
 }
 
 function setTool(tool) {
