@@ -247,9 +247,15 @@
       </div>
     </div>
 
-    <!-- Lighting controls (conditionally shown via config) -->
-    <div id="debug-lighting" style="display: none;">
+    <!-- Terrain and Lighting controls -->
+    <div id="debug-terrain">
       <div class="hud-divider"></div>
+      <div class="hud-row">
+        <label class="hud-label" style="cursor:pointer;">
+          <input type="checkbox" id="terrainWireframe" style="margin-right:6px;" />
+          Show Wireframe
+        </label>
+      </div>
       <div class="hud-row">
         <span class="hud-label">Hour</span>
         <input id="hourInput" class="hud-input" type="number" value="12" min="0" max="24" step="0.5" />
@@ -484,7 +490,13 @@
         resolution: CONFIG.TERRAIN.fallbackResolution
       });
     }
-    scene.add(terrain.mesh);
+    scene.add(terrain.group);
+
+    // Wireframe toggle
+    const wireframeCheckbox = document.getElementById('terrainWireframe');
+    wireframeCheckbox.addEventListener('change', () => {
+      terrain.setWireframeVisible(wireframeCheckbox.checked);
+    });
 
     // ========== HOWITZER ==========
     const howitzerData = createHowitzer(scene, CONFIG.buildCannonConfig(gameSession.currentHole));
@@ -849,11 +861,6 @@
     const camPosValue = document.getElementById('camPosValue');
     const camRotValue = document.getElementById('camRotValue');
     const ballDistValue = document.getElementById('ballDistValue');
-
-    // Show/hide lighting controls based on config
-    if (CONFIG.UI.showLightingControls) {
-      document.getElementById('debug-lighting').style.display = 'block';
-    }
 
     // Initialize auto-follow settings from config
     document.getElementById('autoFollowShot').checked = CONFIG.AUTO_FOLLOW.enabled;

@@ -193,6 +193,11 @@ terrain.updateColors([
   { height: 0.5, color: new THREE.Color(0x8ab84a) },
   { height: 1.0, color: new THREE.Color(0xffffff) }
 ]);
+
+// Wireframe overlay
+terrain.setWireframeVisible(true);   // Toggle wireframe
+terrain.setWireframeOpacity(0.15);   // Adjust opacity (0-1)
+terrain.isWireframeVisible();        // Check state
 ```
 
 **JSON Config Format** (`golf_course.json`):
@@ -298,7 +303,11 @@ const gameSession = {
 - Stage name
 - Camera position/rotation
 - Ball distance (meters/yards)
-- Hour slider (hidden by default, CONFIG.UI.showLightingControls)
+
+**Terrain section** (`debug-terrain`, always visible):
+- Show Wireframe checkbox - toggles faint white wireframe overlay
+- Hour slider - time of day (0-24)
+- Lock Lighting checkbox - prevents hour from affecting lighting
 
 **Per-stage sections**:
 - `debug-drone`: Drone Height, Speed, Transition speed (Idle stage)
@@ -367,8 +376,8 @@ The `trees.js` module provides procedural tree placement for heightmap-based ter
 
 ## Last Updated
 
-January 2025 - Added terrain system:
+January 2025 - Terrain system with wireframe debug mode:
 - `terrain-heightmap.js`: Loads terrain from JSON config + binary heightmap data
-- `terrain-renderer.js`: Renders terrain with vertex coloring based on height
+- `terrain-renderer.js`: Renders terrain with vertex coloring + wireframe overlay
 - `config.js`: Added TERRAIN settings (configFile, enabled, fallback options)
-- `index.html`: Wrapped in async init(), replaced flat floor with terrain system
+- `index.html`: Async init, terrain system, wireframe toggle, always-visible lighting controls

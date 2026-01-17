@@ -148,13 +148,59 @@ export async function createTerrain(options = {}) {
   mesh.castShadow = false;
   mesh.name = 'terrain';
 
+  // Create wireframe overlay mesh
+  const wireframeMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.15,
+    depthTest: true,
+    depthWrite: false
+  });
+  const wireframeMesh = new THREE.Mesh(mesh.geometry, wireframeMaterial);
+  wireframeMesh.position.y = 0.05; // Slight offset to prevent z-fighting
+  wireframeMesh.name = 'terrain-wireframe';
+  wireframeMesh.visible = false; // Hidden by default
+
+  // Group terrain and wireframe together
+  const terrainGroup = new THREE.Group();
+  terrainGroup.name = 'terrain-group';
+  terrainGroup.add(mesh);
+  terrainGroup.add(wireframeMesh);
+
   console.log(`Terrain ready: ${config.terrainSize}x${config.terrainSize} units, max height: ${config.maxHeight}`);
 
   return {
     mesh,
+    wireframeMesh,
+    group: terrainGroup,
     heightmap,
     config,
     loadedFromFile,
+
+    /**
+     * Toggle wireframe overlay visibility
+     * @param {boolean} visible - Whether wireframe should be visible
+     */
+    setWireframeVisible(visible) {
+      wireframeMesh.visible = visible;
+    },
+
+    /**
+     * Check if wireframe is visible
+     * @returns {boolean}
+     */
+    isWireframeVisible() {
+      return wireframeMesh.visible;
+    },
+
+    /**
+     * Set wireframe opacity
+     * @param {number} opacity - Opacity value 0-1
+     */
+    setWireframeOpacity(opacity) {
+      wireframeMaterial.opacity = Math.max(0, Math.min(1, opacity));
+    },
 
     /**
      * Update vertex colors with new color stops
@@ -221,6 +267,26 @@ export function createFlatColoredTerrain(options = {}) {
   mesh.receiveShadow = true;
   mesh.name = 'terrain';
 
+  // Create wireframe overlay mesh
+  const wireframeMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.15,
+    depthTest: true,
+    depthWrite: false
+  });
+  const wireframeMesh = new THREE.Mesh(geometry, wireframeMaterial);
+  wireframeMesh.position.y = 0.05;
+  wireframeMesh.name = 'terrain-wireframe';
+  wireframeMesh.visible = false;
+
+  // Group terrain and wireframe together
+  const terrainGroup = new THREE.Group();
+  terrainGroup.name = 'terrain-group';
+  terrainGroup.add(mesh);
+  terrainGroup.add(wireframeMesh);
+
   // Create minimal heightmap interface
   const heightmap = {
     terrainSize: size,
@@ -233,9 +299,20 @@ export function createFlatColoredTerrain(options = {}) {
 
   return {
     mesh,
+    wireframeMesh,
+    group: terrainGroup,
     heightmap,
     config: { terrainSize: size, resolution, maxHeight: 0 },
     loadedFromFile: false,
+    setWireframeVisible(visible) {
+      wireframeMesh.visible = visible;
+    },
+    isWireframeVisible() {
+      return wireframeMesh.visible;
+    },
+    setWireframeOpacity(opacity) {
+      wireframeMaterial.opacity = Math.max(0, Math.min(1, opacity));
+    },
     getHeightAt: () => 0,
     getNormalAt: () => new THREE.Vector3(0, 1, 0),
     isInBounds(x, z) {
