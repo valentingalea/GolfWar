@@ -8,3 +8,4 @@ export const STRENGTH_RING_MIN_FACTOR = 0.2
 export const FALLOFF_ARC_DEGREES = 60
 export const FALLOFF_RADIUS_FACTOR = 0.6
 export const HEIGHT_EXPORT_EPSILON = 0.0001
+export const UNDO_MAX_HISTORY = 10

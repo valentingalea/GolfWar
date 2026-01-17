@@ -11,7 +11,8 @@ import {
   STRENGTH_RING_MIN_FACTOR,
   FALLOFF_ARC_DEGREES,
   FALLOFF_RADIUS_FACTOR,
-  HEIGHT_EXPORT_EPSILON
+  HEIGHT_EXPORT_EPSILON,
+  UNDO_MAX_HISTORY
 } from './config.js'
 
 const canvas = document.querySelector('#terrain-canvas')
@@ -92,7 +93,8 @@ const state = {
   hitPoint: new THREE.Vector3(),
   flattenHeight: 0,
   segments: Number(resolutionSelect.value),
-  maxHeight: 0
+  maxHeight: 0,
+  history: []
 }
 
 let terrain = null
@@ -325,6 +327,31 @@ function applyBrush() {
   updateMaxHeight()
 }
 
+function pushHistorySnapshot() {
+  if (!terrain) return
+  const snapshot = new Float32Array(terrain.positions.count)
+  const array = terrain.positions.array
+  for (let i = 0; i < terrain.positions.count; i += 1) {
+    snapshot[i] = array[i * 3 + 1]
+  }
+  state.history.push(snapshot)
+  if (state.history.length > UNDO_MAX_HISTORY) {
+    state.history.shift()
+  }
+}
+
+function applySnapshot(snapshot) {
+  if (!terrain || !snapshot) return
+  const array = terrain.positions.array
+  for (let i = 0; i < terrain.positions.count; i += 1) {
+    array[i * 3 + 1] = snapshot[i]
+  }
+  terrain.positions.needsUpdate = true
+  terrain.geometry.computeVertexNormals()
+  terrain.geometry.attributes.normal.needsUpdate = true
+  updateMaxHeight()
+}
+
 function updateStrengthRing() {
   const maxStrength = Number(strengthInput.max) || 1
   const ratio = Math.max(STRENGTH_RING_MIN_FACTOR, state.brushStrength / maxStrength)
@@ -505,6 +532,9 @@ window.addEventListener('pointerdown', (event) => {
   state.isPointerDown = true
   state.lower = event.shiftKey
   controls.enabled = false
+  if (state.hasHit) {
+    pushHistorySnapshot()
+  }
   if (state.tool === 'flatten' && state.hasHit) {
     state.flattenHeight = state.hitPoint.y
   }
@@ -573,6 +603,12 @@ canvas.addEventListener(
 )
 
 window.addEventListener('keydown', (event) => {
+  if (event.key.toLowerCase() === 'z' && event.ctrlKey) {
+    event.preventDefault()
+    const snapshot = state.history.pop()
+    applySnapshot(snapshot)
+    return
+  }
   if (event.key === '1') setTool('sculpt')
   if (event.key === '2') setTool('smooth')
   if (event.key === '3') setTool('flatten')
