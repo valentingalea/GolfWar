@@ -458,7 +458,9 @@ export function createProjectileSystem(scene, howitzer, firingAnim, terrain = nu
     rollingFriction: 2.5,     // Deceleration when rolling (m/s²)
     minBounceVelocity: 0.5,   // Below this, stop bouncing
     minRollVelocity: 0.1,     // Below this, stop completely
-    slopeFriction: 0.4        // Additional friction on steep slopes
+    slopeFriction: 0.4,       // Additional friction on steep slopes
+    slowRollSpeed: 0.5,       // Speed considered "slow rolling"
+    maxSlowRollTime: 2.0      // Max seconds of slow rolling before force-stop
   };
 
   // Helper: get ground height at position (uses terrain if available)
@@ -566,8 +568,9 @@ export function createProjectileSystem(scene, howitzer, firingAnim, terrain = nu
       velocity: direction.multiplyScalar(velocity),
       mass: mass,
       smokeTimer: 0,
-      state: 'flying',      // flying, rolling, stopped
+      state: 'flying',      // flying, bouncing, rolling, stopped
       bounceCount: 0,
+      slowRollTime: 0,      // Time spent rolling slowly (for stuck detection)
       notifiedStabilized: false,
       launchPosition: muzzleWorld.clone()  // Track launch position for distance calculation
     });
@@ -670,16 +673,26 @@ export function createProjectileSystem(scene, howitzer, firingAnim, terrain = nu
           proj.velocity.sub(normal.clone().multiplyScalar(vDotN));
         }
 
-        // Calculate horizontal speed for friction and stopping
+        // Calculate speed for friction and stopping
         const speed = proj.velocity.length();
 
         // Calculate slope steepness for extra friction on steep slopes
         const slopeSteepness = 1 - normal.y; // 0 = flat, 1 = vertical
         const extraFriction = slopeSteepness * physics.slopeFriction;
 
-        if (speed < physics.minRollVelocity) {
-          // Check if slope is steep enough to keep rolling
-          if (slopeAccel.length() < physics.minRollVelocity * 2) {
+        // Track slow rolling time (to detect stuck on shallow slopes)
+        if (speed < physics.slowRollSpeed) {
+          proj.slowRollTime += dt;
+        } else {
+          proj.slowRollTime = 0; // Reset if moving fast enough
+        }
+
+        // Force stop if rolling slowly for too long (stuck on shallow slope)
+        const forceStop = proj.slowRollTime >= physics.maxSlowRollTime;
+
+        if (speed < physics.minRollVelocity || forceStop) {
+          // Check if slope is steep enough to keep rolling (unless force stopping)
+          if (forceStop || slopeAccel.length() < physics.minRollVelocity * 2) {
             // Ball stopped
             proj.state = 'stopped';
             proj.velocity.set(0, 0, 0);
