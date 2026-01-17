@@ -12,7 +12,9 @@ import {
   FALLOFF_ARC_DEGREES,
   FALLOFF_RADIUS_FACTOR,
   HEIGHT_EXPORT_EPSILON,
-  UNDO_MAX_HISTORY
+  UNDO_MAX_HISTORY,
+  MATERIAL_TYPES,
+  DEFAULT_MATERIAL_ID
 } from './config.js'
 
 const canvas = document.querySelector('#terrain-canvas')
@@ -24,6 +26,7 @@ const sizeValue = document.querySelector('#brush-size-value')
 const strengthValue = document.querySelector('#brush-strength-value')
 const falloffValue = document.querySelector('#brush-falloff-value')
 const toolButtons = document.querySelectorAll('[data-tool]')
+const materialButtons = document.querySelectorAll('[data-material-id]')
 const overlayModeButtons = document.querySelectorAll('[data-overlay-mode]')
 const referenceInput = document.querySelector('#reference-image')
 const referenceOpacity = document.querySelector('#reference-opacity')
@@ -87,6 +90,7 @@ const state = {
   brushSize: Number(sizeInput.value),
   brushStrength: Number(strengthInput.value),
   brushFalloff: Number(falloffInput.value),
+  materialId: DEFAULT_MATERIAL_ID,
   isPointerDown: false,
   lower: false,
   hasHit: false,
@@ -102,6 +106,14 @@ let overlayProjected = null
 let overlayFlat = null
 let overlayTexture = null
 let overlayObjectUrl = null
+const materialPalette = new Map()
+
+MATERIAL_TYPES.forEach((material) => {
+  materialPalette.set(material.id, {
+    name: material.name,
+    color: new THREE.Color(material.color)
+  })
+})
 
 const overlayState = {
   mode: 'projected',
@@ -175,15 +187,22 @@ function buildTerrain(segments) {
   geometry.computeVertexNormals()
 
   const material = new THREE.MeshStandardMaterial({
-    color: 0x4f7c71,
+    color: 0xffffff,
     roughness: 0.85,
     metalness: 0.05,
-    wireframe: wireframeToggle.checked
+    wireframe: wireframeToggle.checked,
+    vertexColors: true
   })
 
   const mesh = new THREE.Mesh(geometry, material)
   mesh.receiveShadow = true
   scene.add(mesh)
+
+  const colors = new Float32Array(geometry.attributes.position.count * 3)
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  const materialMap = new Uint8Array((segments + 1) * (segments + 1))
+  materialMap.fill(DEFAULT_MATERIAL_ID)
+  applyMaterialColors(materialMap, colors)
 
   overlayProjected = createOverlayMesh(geometry)
   overlayProjected.renderOrder = 2
@@ -194,6 +213,8 @@ function buildTerrain(segments) {
     mesh,
     geometry,
     positions: geometry.attributes.position,
+    colors: geometry.attributes.color,
+    materialMap,
     segments,
     grid: segments + 1
   }
@@ -290,6 +311,16 @@ function applyBrush() {
       continue
     }
 
+    if (state.tool === 'paint') {
+      const maxStrength = Number(strengthInput.max) || 1
+      const normalizedStrength = Math.min(1, state.brushStrength / maxStrength)
+      if (influence >= 1 - normalizedStrength) {
+        terrain.materialMap[i] = state.materialId
+        applyMaterialColorAt(i)
+      }
+      continue
+    }
+
     if (state.tool === 'flatten') {
       const currentHeight = array[index + 1]
       array[index + 1] = lerp(currentHeight, state.flattenHeight, strength * influence)
@@ -321,6 +352,10 @@ function applyBrush() {
     }
   }
 
+  if (state.tool === 'paint') {
+    terrain.colors.needsUpdate = true
+    return
+  }
   positions.needsUpdate = true
   terrain.geometry.computeVertexNormals()
   terrain.geometry.attributes.normal.needsUpdate = true
@@ -329,12 +364,13 @@ function applyBrush() {
 
 function pushHistorySnapshot() {
   if (!terrain) return
-  const snapshot = new Float32Array(terrain.positions.count)
-  const array = terrain.positions.array
+  const heightSnapshot = new Float32Array(terrain.positions.count)
+  const heightArray = terrain.positions.array
   for (let i = 0; i < terrain.positions.count; i += 1) {
-    snapshot[i] = array[i * 3 + 1]
+    heightSnapshot[i] = heightArray[i * 3 + 1]
   }
-  state.history.push(snapshot)
+  const materialSnapshot = new Uint8Array(terrain.materialMap)
+  state.history.push({ heightSnapshot, materialSnapshot })
   if (state.history.length > UNDO_MAX_HISTORY) {
     state.history.shift()
   }
@@ -344,11 +380,14 @@ function applySnapshot(snapshot) {
   if (!terrain || !snapshot) return
   const array = terrain.positions.array
   for (let i = 0; i < terrain.positions.count; i += 1) {
-    array[i * 3 + 1] = snapshot[i]
+    array[i * 3 + 1] = snapshot.heightSnapshot[i]
   }
+  terrain.materialMap.set(snapshot.materialSnapshot)
+  applyMaterialColors(terrain.materialMap, terrain.colors.array)
   terrain.positions.needsUpdate = true
   terrain.geometry.computeVertexNormals()
   terrain.geometry.attributes.normal.needsUpdate = true
+  terrain.colors.needsUpdate = true
   updateMaxHeight()
 }
 
@@ -386,12 +425,43 @@ function updateFalloffCurve() {
   falloffCurve.geometry.attributes.position.needsUpdate = true
 }
 
+function applyMaterialColors(materialMap, colors) {
+  for (let i = 0; i < materialMap.length; i += 1) {
+    const color = materialPalette.get(materialMap[i])?.color || materialPalette.get(DEFAULT_MATERIAL_ID).color
+    const index = i * 3
+    colors[index] = color.r
+    colors[index + 1] = color.g
+    colors[index + 2] = color.b
+  }
+}
+
+function applyMaterialColorAt(index) {
+  const color = materialPalette.get(terrain.materialMap[index])?.color || materialPalette.get(DEFAULT_MATERIAL_ID).color
+  const colorIndex = index * 3
+  const colors = terrain.colors.array
+  colors[colorIndex] = color.r
+  colors[colorIndex + 1] = color.g
+  colors[colorIndex + 2] = color.b
+}
+
+function updateMaterialSelection() {
+  materialButtons.forEach((button) => {
+    button.classList.toggle('is-active', Number(button.dataset.materialId) === state.materialId)
+  })
+  if (state.tool === 'paint') {
+    const materialName = materialPalette.get(state.materialId)?.name || 'unknown'
+    statusEl.textContent = `Tool: Paint (${materialName})`
+  }
+}
+
 function setTool(tool) {
   state.tool = tool
   toolButtons.forEach((button) => {
     button.classList.toggle('is-active', button.dataset.tool === tool)
   })
-  statusEl.textContent = `Tool: ${tool.charAt(0).toUpperCase() + tool.slice(1)}`
+  const toolLabel = tool.charAt(0).toUpperCase() + tool.slice(1)
+  const materialName = materialPalette.get(state.materialId)?.name || 'unknown'
+  statusEl.textContent = tool === 'paint' ? `Tool: ${toolLabel} (${materialName})` : `Tool: ${toolLabel}`
 }
 
 toolButtons.forEach((button) => {
@@ -399,6 +469,15 @@ toolButtons.forEach((button) => {
     setTool(button.dataset.tool)
   })
 })
+
+materialButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    state.materialId = Number(button.dataset.materialId)
+    updateMaterialSelection()
+  })
+})
+
+updateMaterialSelection()
 
 overlayModeButtons.forEach((button) => {
   button.addEventListener('click', () => {
@@ -440,7 +519,10 @@ resetButton.addEventListener('click', () => {
   for (let i = 0; i < terrain.positions.count; i += 1) {
     array[i * 3 + 1] = 0
   }
+  terrain.materialMap.fill(DEFAULT_MATERIAL_ID)
+  applyMaterialColors(terrain.materialMap, terrain.colors.array)
   terrain.positions.needsUpdate = true
+  terrain.colors.needsUpdate = true
   terrain.geometry.computeVertexNormals()
   terrain.geometry.attributes.normal.needsUpdate = true
   updateMaxHeight()
@@ -480,12 +562,24 @@ exportButton.addEventListener('click', () => {
   dataLink.click()
   URL.revokeObjectURL(dataUrl)
 
+  const materialFile = `materials_${grid}x${grid}_uint8.raw`
+  const materialBlob = new Blob([terrain.materialMap.buffer], { type: 'application/octet-stream' })
+  const materialUrl = URL.createObjectURL(materialBlob)
+  const materialLink = document.createElement('a')
+  materialLink.href = materialUrl
+  materialLink.download = materialFile
+  materialLink.click()
+  URL.revokeObjectURL(materialUrl)
+
   const schema = {
     terrainSize,
     resolution: terrain.segments,
     maxHeight: state.maxHeight,
     exportType,
-    binaryFile: `${baseName}.raw`
+    binaryFile: `${baseName}.raw`,
+    materialFile,
+    materialEncoding: 'uint8',
+    materialLegend: MATERIAL_TYPES.map((material) => ({ id: material.id, name: material.name }))
   }
   const schemaBlob = new Blob([JSON.stringify(schema, null, 2)], { type: 'application/json' })
   const schemaUrl = URL.createObjectURL(schemaBlob)
@@ -631,6 +725,30 @@ window.addEventListener('keydown', (event) => {
   if (event.key === '1') setTool('sculpt')
   if (event.key === '2') setTool('smooth')
   if (event.key === '3') setTool('flatten')
+  if (event.key === '4') {
+    state.materialId = 0
+    updateMaterialSelection()
+  }
+  if (event.key === '5') {
+    state.materialId = 1
+    updateMaterialSelection()
+  }
+  if (event.key === '6') {
+    state.materialId = 2
+    updateMaterialSelection()
+  }
+  if (event.key === '7') {
+    state.materialId = 3
+    updateMaterialSelection()
+  }
+  if (event.key === '8') {
+    state.materialId = 4
+    updateMaterialSelection()
+  }
+  if (event.key === '9') {
+    state.materialId = 5
+    updateMaterialSelection()
+  }
   if (event.key.toLowerCase() === 'r') resetButton.click()
 })
 

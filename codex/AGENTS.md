@@ -10,7 +10,7 @@ This file summarizes the work done so far in this repository (`codex` folder) so
 
 ## Current features (MVP)
 - 3D sculptable terrain (tessellated plane) with OrbitControls.
-- Tools: Sculpt (raise/lower), Smooth, Flatten.
+- Tools: Sculpt (raise/lower), Smooth, Flatten, Paint.
 - Brush controls: Size, Strength, Falloff.
 - UI panel with tool buttons, sliders, toggles, resolution selector.
 - Reference image overlay: load image, projected or flat decal, opacity/scale/rotation/offset controls.
@@ -18,6 +18,7 @@ This file summarizes the work done so far in this repository (`codex` folder) so
 - Brush previews: size ring, strength inner ring, falloff curve arc facing camera.
 - Max height readout (tracks highest terrain point).
 - Undo: Ctrl+Z with snapshot history (currently 10 steps).
+- Material painting: dominant per-vertex material ids with golf surface palette.
 
 ## Controls
 - Left drag: sculpt (hold Shift to lower).
@@ -27,11 +28,13 @@ This file summarizes the work done so far in this repository (`codex` folder) so
 - Shift + wheel: change brush strength (blocks zoom when modifier held).
 - Alt + wheel: change brush falloff (blocks zoom when modifier held).
 - Ctrl + Z: undo last stroke (history depth configured in `src/config.js`).
+- Keys 4-9: select material (fairway, green, rough, bunker, tee, water).
 - Keys: `1` sculpt, `2` smooth, `3` flatten, `R` reset.
 
 ## File map
 - `index.html`: UI layout for HUD/panel, controls, reference section, export selector.
 - `src/style.css`: custom UI theme and layout.
+- `src/style.css` also enables panel scrolling when the sidebar overflows.
 - `src/main.js`: scene setup, sculpt logic, raycast, overlays, export, input handling.
 - `src/config.js`: constants for tuning (terrain size, brush scaling, preview sizes, export epsilon).
 
@@ -45,6 +48,7 @@ This file summarizes the work done so far in this repository (`codex` folder) so
 - Flat overlay is a separate plane slightly above terrain.
 - Export uses row-major array order of vertex heights.
 - Schema JSON includes terrain size, segment resolution, max height, export type, and binary filename.
+- Material export: `materials_*_uint8.raw` plus schema fields `materialFile`, `materialEncoding`, `materialLegend`.
 - Max height recomputed after each brush operation and reset.
 - Falloff preview arc is camera-facing via per-vertex direction using camera->hitPoint vectors.
 - Undo snapshots stored per stroke in a history array; `UNDO_MAX_HISTORY` controls depth.
