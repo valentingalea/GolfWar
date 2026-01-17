@@ -30,8 +30,12 @@ GolfWar/
     ├── flag.js         # Golf hole marker
     ├── lighting.js     # Scene lighting and shadows
     ├── sun.js          # Skybox, sun, day/night cycle
-    ├── trees.js        # Procedural tree placement (not currently used)
-    └── golf_course.png # Floor texture
+    ├── terrain-heightmap.js # Heightmap loading from JSON + binary data
+    ├── terrain-renderer.js  # Terrain mesh with vertex coloring (main entry)
+    ├── trees.js        # Procedural tree placement (requires heightmap)
+    ├── golf_course.json # Terrain config (terrainSize, resolution, maxHeight, etc.)
+    ├── golf_course.raw  # Binary heightmap data (referenced by JSON)
+    └── golf_course.png # Floor/terrain texture
 ```
 
 ## Core Game Loop
@@ -160,6 +164,57 @@ gameUI.updateCannonDisplay(rotation, elevation);
 gameUI.syncProjectileValues(velocityEl, massEl);  // Sync with hidden inputs
 ```
 
+### Terrain System (`terrain-renderer.js` + `terrain-heightmap.js`)
+
+Main entry point is `terrain-renderer.js` which uses `terrain-heightmap.js` internally:
+
+```javascript
+// Load terrain with vertex coloring (async)
+const terrain = await createTerrain({
+  configFile: './golf_course.json'
+});
+scene.add(terrain.mesh);
+
+// Or create flat colored fallback (sync)
+const terrain = createFlatColoredTerrain({ size: 4000, resolution: 64 });
+
+// Query height at world position
+const y = terrain.getHeightAt(worldX, worldZ);
+
+// Get terrain normal
+const normal = terrain.getNormalAt(worldX, worldZ);
+
+// Check bounds
+if (terrain.isInBounds(x, z)) { ... }
+
+// Update vertex colors with custom gradient
+terrain.updateColors([
+  { height: 0.0, color: new THREE.Color(0x2d5016) },
+  { height: 0.5, color: new THREE.Color(0x8ab84a) },
+  { height: 1.0, color: new THREE.Color(0xffffff) }
+]);
+```
+
+**JSON Config Format** (`golf_course.json`):
+```json
+{
+  "terrainSize": 4000,      // Width/depth in 3D units
+  "resolution": 256,        // Segments per side (vertices = (res+1)^2)
+  "maxHeight": 100,         // Maximum elevation
+  "exportType": "float32",  // or "uint16"
+  "binaryFile": "./golf_course.raw"
+}
+```
+
+**Binary File**: Raw vertex heights, row-major order, `(resolution+1)^2` values.
+
+**Vertex Color Gradient** (default, by normalized height):
+- 0.00: Deep green (valleys)
+- 0.30: Light green (grass)
+- 0.50: Yellow-green (hills)
+- 0.70: Brown (rocky)
+- 1.00: White (snow peaks)
+
 ### Configuration (`config.js`)
 
 All tunable parameters are centralized here:
@@ -173,6 +228,7 @@ All tunable parameters are centralized here:
 - `FIRING` - Animation durations, recoil distances
 - `FLAG` - Scale (4x), dimensions
 - `AUTO_FOLLOW` - Enabled (true), delay (1 sec)
+- `TERRAIN` - Heightmap config file path, enabled flag, texture
 
 Helper functions:
 ```javascript
@@ -252,28 +308,30 @@ Hidden inputs synced with Game UI:
 - `#velocityInput`, `#massInput` - projectile params
 - `#rotationValue`, `#elevationValue` - cannon angles
 
-## Trees System (Not Currently Used)
+## Trees System
 
 The `trees.js` module provides procedural tree placement for heightmap-based terrain:
 - Pine trees, deciduous trees, bushes
 - Density, clustering, slope-based placement
-- Requires heightmap object with `getHeightInterpolated(u, v)`
-- Not integrated in current flat-floor prototype
+- Requires heightmap object from `terrain-heightmap.js` with `getHeightInterpolated(u, v)`
+- Use `createTrees(heightmap, terrainConfig, treeConfig)` after loading terrain
 
 ## Files by Size (Complexity Indicator)
 
 | File | Lines | Notes |
 |------|-------|-------|
 | cannon.js | ~760 | Most complex - model + physics + animation |
-| index.html | ~960 | Main orchestration, event handling |
+| index.html | ~975 | Main orchestration, async init, event handling |
 | hand-objects.js | ~320 | 5 hand object models |
 | mobile-controls.js | ~350 | Touch controls system |
-| trees.js | ~350 | Not used in current build |
+| trees.js | ~350 | Procedural tree placement |
+| terrain-heightmap.js | ~320 | Heightmap loading from binary |
+| terrain-renderer.js | ~250 | Vertex coloring + terrain API |
 | drone.js | ~250 | Drone view with transition |
 | hands.js | ~230 | First-person hands model |
 | game-ui.js | ~220 | Overlay panels |
 | sun.js | ~215 | Skybox shader, day/night |
-| config.js | ~205 | All configuration |
+| config.js | ~215 | All configuration |
 | game-state.js | ~195 | State machine |
 | flag.js | ~80 | Simple flag model |
 | lighting.js | ~60 | Light setup |
@@ -309,4 +367,8 @@ The `trees.js` module provides procedural tree placement for heightmap-based ter
 
 ## Last Updated
 
-January 2025 - This document reflects the state after terrain generation removal and gameplay stage implementation.
+January 2025 - Added terrain system:
+- `terrain-heightmap.js`: Loads terrain from JSON config + binary heightmap data
+- `terrain-renderer.js`: Renders terrain with vertex coloring based on height
+- `config.js`: Added TERRAIN settings (configFile, enabled, fallback options)
+- `index.html`: Wrapped in async init(), replaced flat floor with terrain system

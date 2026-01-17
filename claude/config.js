@@ -143,6 +143,15 @@ export const AUTO_FOLLOW = {
   delaySec: 1             // Delay before switching to drone view
 };
 
+// ========== TERRAIN SETTINGS ==========
+export const TERRAIN = {
+  configFile: './golf_course.json',  // JSON file with terrain heightmap config
+  enabled: true,                      // Whether to use heightmap terrain
+  texture: './golf_course.png',       // Texture to apply to terrain
+  fallbackSize: 4000,                 // Size if heightmap fails to load
+  fallbackResolution: 64              // Resolution if heightmap fails
+};
+
 // ========== HELPER FUNCTIONS ==========
 
 // Get hole data by number (1-indexed)
