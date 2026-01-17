@@ -452,6 +452,7 @@ exportButton.addEventListener('click', () => {
   const array = terrain.positions.array
   let payload = null
   let suffix = 'float32'
+  let exportType = 'float32'
   if (exportFormat.value === 'uint16') {
     const maxHeight = Math.max(state.maxHeight, HEIGHT_EXPORT_EPSILON)
     const heights = new Uint16Array(grid * grid)
@@ -462,6 +463,7 @@ exportButton.addEventListener('click', () => {
     }
     payload = heights
     suffix = 'uint16'
+    exportType = 'uint16'
   } else {
     const heights = new Float32Array(grid * grid)
     for (let i = 0; i < grid * grid; i += 1) {
@@ -469,12 +471,29 @@ exportButton.addEventListener('click', () => {
     }
     payload = heights
   }
-  const blob = new Blob([payload.buffer], { type: 'application/octet-stream' })
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(blob)
-  link.download = `heightmap_${grid}x${grid}_${suffix}.raw`
-  link.click()
-  URL.revokeObjectURL(link.href)
+  const baseName = `heightmap_${grid}x${grid}_${suffix}`
+  const dataBlob = new Blob([payload.buffer], { type: 'application/octet-stream' })
+  const dataUrl = URL.createObjectURL(dataBlob)
+  const dataLink = document.createElement('a')
+  dataLink.href = dataUrl
+  dataLink.download = `${baseName}.raw`
+  dataLink.click()
+  URL.revokeObjectURL(dataUrl)
+
+  const schema = {
+    terrainSize,
+    resolution: terrain.segments,
+    maxHeight: state.maxHeight,
+    exportType,
+    binaryFile: `${baseName}.raw`
+  }
+  const schemaBlob = new Blob([JSON.stringify(schema, null, 2)], { type: 'application/json' })
+  const schemaUrl = URL.createObjectURL(schemaBlob)
+  const schemaLink = document.createElement('a')
+  schemaLink.href = schemaUrl
+  schemaLink.download = `${baseName}.json`
+  schemaLink.click()
+  URL.revokeObjectURL(schemaUrl)
 })
 
 referenceInput.addEventListener('change', (event) => {

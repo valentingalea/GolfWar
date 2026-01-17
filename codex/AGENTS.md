@@ -14,7 +14,7 @@ This file summarizes the work done so far in this repository (`codex` folder) so
 - Brush controls: Size, Strength, Falloff.
 - UI panel with tool buttons, sliders, toggles, resolution selector.
 - Reference image overlay: load image, projected or flat decal, opacity/scale/rotation/offset controls.
-- Export heightmap: Float32 raw or Uint16 raw (Uint16 normalized from 0..max height).
+- Export heightmap: Float32 raw or Uint16 raw (Uint16 normalized from 0..max height) plus a schema JSON.
 - Brush previews: size ring, strength inner ring, falloff curve arc facing camera.
 - Max height readout (tracks highest terrain point).
 - Undo: Ctrl+Z with snapshot history (currently 10 steps).
@@ -44,6 +44,7 @@ This file summarizes the work done so far in this repository (`codex` folder) so
 - Overlay projection uses a textured mesh over the same geometry, with polygon offset.
 - Flat overlay is a separate plane slightly above terrain.
 - Export uses row-major array order of vertex heights.
+- Schema JSON includes terrain size, segment resolution, max height, export type, and binary filename.
 - Max height recomputed after each brush operation and reset.
 - Falloff preview arc is camera-facing via per-vertex direction using camera->hitPoint vectors.
 - Undo snapshots stored per stroke in a history array; `UNDO_MAX_HISTORY` controls depth.
