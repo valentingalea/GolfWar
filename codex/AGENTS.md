@@ -17,6 +17,7 @@ This file summarizes the work done so far in this repository (`codex` folder) so
 - Export heightmap: Float32 raw or Uint16 raw (Uint16 normalized from 0..max height).
 - Brush previews: size ring, strength inner ring, falloff curve arc facing camera.
 - Max height readout (tracks highest terrain point).
+- Undo: Ctrl+Z with snapshot history (currently 10 steps).
 
 ## Controls
 - Left drag: sculpt (hold Shift to lower).
@@ -25,6 +26,7 @@ This file summarizes the work done so far in this repository (`codex` folder) so
 - Ctrl + wheel: change brush size (blocks zoom when modifier held).
 - Shift + wheel: change brush strength (blocks zoom when modifier held).
 - Alt + wheel: change brush falloff (blocks zoom when modifier held).
+- Ctrl + Z: undo last stroke (history depth configured in `src/config.js`).
 - Keys: `1` sculpt, `2` smooth, `3` flatten, `R` reset.
 
 ## File map
@@ -44,6 +46,7 @@ This file summarizes the work done so far in this repository (`codex` folder) so
 - Export uses row-major array order of vertex heights.
 - Max height recomputed after each brush operation and reset.
 - Falloff preview arc is camera-facing via per-vertex direction using camera->hitPoint vectors.
+- Undo snapshots stored per stroke in a history array; `UNDO_MAX_HISTORY` controls depth.
 
 ## Known constraints / TODO ideas
 - Vite requires Node 20+; if you need Node 18 support, downgrade Vite or use another bundler.
