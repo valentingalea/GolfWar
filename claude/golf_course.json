@@ -1,0 +1,7 @@
+{
+  "terrainSize": 220,
+  "resolution": 128,
+  "maxHeight": 15.30,
+  "exportType": "float32",
+  "binaryFile": "golf_course.raw"
+}
