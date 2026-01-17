@@ -97,6 +97,7 @@ projectileSystem.onBallStabilized(callback);     // Register callback
 - Friction: 0.35 (tangent velocity loss on bounce)
 - Rolling friction: 2.5 m/s² deceleration
 - Slope friction: 0.4 (extra friction on steep terrain)
+- Slow roll timeout: 2 sec at <0.5 m/s forces stop (prevents infinite creep)
 - States: `flying` → `bouncing` → `rolling` → `stopped`
 
 **Terrain Collision**:
@@ -104,6 +105,7 @@ projectileSystem.onBallStabilized(callback);     // Register callback
 - Bounce reflects off terrain normal using `v' = v - 2(v·n)n` with restitution
 - Rolling follows terrain slope (gravity projects onto surface)
 - Ball stays on terrain surface during rolling
+- Slow roll detection: force-stops after 2s of slow movement on shallow slopes
 - Pass terrain to: `createProjectileSystem(scene, howitzer, firingAnim, terrain)`
 
 ### Drone System (`drone.js`)
