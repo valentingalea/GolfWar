@@ -79,8 +79,8 @@ const cannonControls = createCannonControls(howitzerData);
 cannonControls.adjustRotation(delta);  // degrees
 cannonControls.adjustElevation(delta); // degrees, clamped 0-80
 
-// Projectile system
-const projectileSystem = createProjectileSystem(scene, howitzerData, firingAnim);
+// Projectile system (terrain enables heightmap collision)
+const projectileSystem = createProjectileSystem(scene, howitzerData, firingAnim, terrain);
 projectileSystem.loadCannon();         // Load ball
 projectileSystem.fire();               // Returns true if fired
 projectileSystem.isBallAvailable();    // True if can pick up ball
@@ -93,10 +93,18 @@ projectileSystem.onBallStabilized(callback);     // Register callback
 
 **Projectile Physics** (in cannon.js):
 - Gravity: 9.81 m/s²
-- Base restitution: 0.75 (bounciness)
-- Friction: 0.3 (horizontal loss on bounce)
-- Rolling friction: 2.0 m/s² deceleration
+- Base restitution: 0.65 (bounciness)
+- Friction: 0.35 (tangent velocity loss on bounce)
+- Rolling friction: 2.5 m/s² deceleration
+- Slope friction: 0.4 (extra friction on steep terrain)
 - States: `flying` → `bouncing` → `rolling` → `stopped`
+
+**Terrain Collision**:
+- Ball collides with terrain heightmap (not flat ground)
+- Bounce reflects off terrain normal using `v' = v - 2(v·n)n` with restitution
+- Rolling follows terrain slope (gravity projects onto surface)
+- Ball stays on terrain surface during rolling
+- Pass terrain to: `createProjectileSystem(scene, howitzer, firingAnim, terrain)`
 
 ### Drone System (`drone.js`)
 
@@ -376,8 +384,10 @@ The `trees.js` module provides procedural tree placement for heightmap-based ter
 
 ## Last Updated
 
-January 2025 - Terrain system with wireframe debug mode:
-- `terrain-heightmap.js`: Loads terrain from JSON config + binary heightmap data
-- `terrain-renderer.js`: Renders terrain with vertex coloring + wireframe overlay
-- `config.js`: Added TERRAIN settings (configFile, enabled, fallback options)
-- `index.html`: Async init, terrain system, wireframe toggle, always-visible lighting controls
+January 2025 - Terrain collision physics:
+- `cannon.js`: Ball now collides with terrain heightmap
+  - Bounce reflects off terrain normals
+  - Rolling follows slope with gravity projection
+  - Extra friction on steep slopes
+- `terrain-renderer.js`: Wireframe overlay, vertex coloring
+- `terrain-heightmap.js`: Heightmap loading from JSON + binary

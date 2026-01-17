@@ -434,7 +434,8 @@ export function createCannonControls(howitzer) {
 }
 
 // Projectile system with smoke trails and bounce physics
-export function createProjectileSystem(scene, howitzer, firingAnim) {
+// terrain parameter is optional - if provided, ball collides with heightmap
+export function createProjectileSystem(scene, howitzer, firingAnim, terrain = null) {
   const projectiles = [];
   const smokeParticles = [];
   const gravity = new THREE.Vector3(0, -9.81, 0);
@@ -452,13 +453,46 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
 
   // Physics constants
   const physics = {
-    baseRestitution: 0.75,    // Base bounciness (0-1)
-    friction: 0.3,            // Horizontal velocity loss on bounce
-    rollingFriction: 2.0,     // Deceleration when rolling (m/s²)
+    baseRestitution: 0.65,    // Base bounciness (0-1), slightly lower for terrain
+    friction: 0.35,           // Velocity loss on bounce (tangent to surface)
+    rollingFriction: 2.5,     // Deceleration when rolling (m/s²)
     minBounceVelocity: 0.5,   // Below this, stop bouncing
     minRollVelocity: 0.1,     // Below this, stop completely
-    floorY: 0                 // Floor height
+    slopeFriction: 0.4        // Additional friction on steep slopes
   };
+
+  // Helper: get ground height at position (uses terrain if available)
+  function getGroundHeight(x, z) {
+    if (terrain && terrain.getHeightAt) {
+      return terrain.getHeightAt(x, z);
+    }
+    return 0; // Flat ground fallback
+  }
+
+  // Helper: get ground normal at position
+  function getGroundNormal(x, z) {
+    if (terrain && terrain.getNormalAt) {
+      return terrain.getNormalAt(x, z);
+    }
+    return new THREE.Vector3(0, 1, 0); // Flat ground fallback
+  }
+
+  // Helper: reflect velocity off surface with restitution
+  function reflectVelocity(velocity, normal, restitution, friction) {
+    // Decompose velocity into normal and tangent components
+    const vDotN = velocity.dot(normal);
+    const normalComponent = normal.clone().multiplyScalar(vDotN);
+    const tangentComponent = velocity.clone().sub(normalComponent);
+
+    // Reflect normal component with energy loss (restitution)
+    const reflectedNormal = normalComponent.multiplyScalar(-restitution);
+
+    // Apply friction to tangent component
+    const reflectedTangent = tangentComponent.multiplyScalar(1 - friction);
+
+    // Combine
+    return reflectedNormal.add(reflectedTangent);
+  }
 
   // Smoke trail settings
   const smokeTexture = createSmokeTexture();
@@ -553,7 +587,6 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
     // Update projectiles with physics
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const proj = projectiles[i];
-      const floorHeight = physics.floorY + ballRadius;
 
       if (proj.state === 'stopped') {
         // Ball is at rest, do nothing
@@ -574,74 +607,112 @@ export function createProjectileSystem(scene, howitzer, firingAnim) {
           }
         }
 
-        // Check floor collision
+        // Get terrain height at ball position
+        const groundHeight = getGroundHeight(proj.mesh.position.x, proj.mesh.position.z);
+        const floorHeight = groundHeight + ballRadius;
+
+        // Check terrain collision
         if (proj.mesh.position.y <= floorHeight) {
+          // Place ball on terrain surface
           proj.mesh.position.y = floorHeight;
 
-          // Calculate impact velocity
-          const impactSpeed = Math.abs(proj.velocity.y);
+          // Get terrain normal for bounce calculation
+          const normal = getGroundNormal(proj.mesh.position.x, proj.mesh.position.z);
+
+          // Calculate impact speed (component into the surface)
+          const impactSpeed = Math.abs(proj.velocity.dot(normal));
 
           if (impactSpeed < physics.minBounceVelocity) {
             // Too slow to bounce, start rolling
             proj.state = 'rolling';
-            proj.velocity.y = 0;
+            // Remove velocity component into ground
+            const vDotN = proj.velocity.dot(normal);
+            if (vDotN < 0) {
+              proj.velocity.sub(normal.clone().multiplyScalar(vDotN));
+            }
           } else {
             // Bounce!
             proj.state = 'bouncing';
             proj.bounceCount++;
 
             // Calculate restitution based on mass and impact speed
-            // Heavier balls retain more energy, very fast impacts lose more
-            const massRatio = Math.min(proj.mass / 20, 1.5); // Normalize around 20kg
-            const speedFactor = Math.max(0.8, 1 - impactSpeed * 0.005); // Lose energy at high speeds
+            const massRatio = Math.min(proj.mass / 20, 1.5);
+            const speedFactor = Math.max(0.8, 1 - impactSpeed * 0.005);
             const restitution = physics.baseRestitution * massRatio * speedFactor;
 
-            // Reflect vertical velocity with energy loss
-            proj.velocity.y = -proj.velocity.y * Math.min(restitution, 0.95);
-
-            // Apply friction to horizontal velocity
-            proj.velocity.x *= (1 - physics.friction);
-            proj.velocity.z *= (1 - physics.friction);
+            // Reflect velocity off terrain normal
+            proj.velocity.copy(
+              reflectVelocity(proj.velocity, normal, Math.min(restitution, 0.95), physics.friction)
+            );
           }
         }
       }
 
       if (proj.state === 'rolling') {
-        // Ball is rolling on the ground
-        proj.mesh.position.y = floorHeight;
-        proj.velocity.y = 0;
+        // Get terrain height and normal at current position
+        const groundHeight = getGroundHeight(proj.mesh.position.x, proj.mesh.position.z);
+        const normal = getGroundNormal(proj.mesh.position.x, proj.mesh.position.z);
 
-        // Apply rolling friction
-        const horizontalSpeed = Math.sqrt(proj.velocity.x ** 2 + proj.velocity.z ** 2);
+        // Keep ball on terrain surface
+        proj.mesh.position.y = groundHeight + ballRadius;
 
-        if (horizontalSpeed < physics.minRollVelocity) {
-          // Ball stopped
-          proj.state = 'stopped';
-          proj.velocity.set(0, 0, 0);
+        // Calculate slope direction (gravity component along surface)
+        // slopeDir = gravity - (gravity · normal) * normal
+        const gravityDotNormal = gravity.dot(normal);
+        const slopeAccel = gravity.clone().sub(normal.clone().multiplyScalar(gravityDotNormal));
 
-          // Notify that ball has stabilized
-          if (!proj.notifiedStabilized && onBallStabilizedCallback) {
-            proj.notifiedStabilized = true;
-            onBallStabilizedCallback(proj);
+        // Apply slope acceleration (ball rolls downhill)
+        proj.velocity.addScaledVector(slopeAccel, dt);
+
+        // Remove any velocity component into the ground
+        const vDotN = proj.velocity.dot(normal);
+        if (vDotN < 0) {
+          proj.velocity.sub(normal.clone().multiplyScalar(vDotN));
+        }
+
+        // Calculate horizontal speed for friction and stopping
+        const speed = proj.velocity.length();
+
+        // Calculate slope steepness for extra friction on steep slopes
+        const slopeSteepness = 1 - normal.y; // 0 = flat, 1 = vertical
+        const extraFriction = slopeSteepness * physics.slopeFriction;
+
+        if (speed < physics.minRollVelocity) {
+          // Check if slope is steep enough to keep rolling
+          if (slopeAccel.length() < physics.minRollVelocity * 2) {
+            // Ball stopped
+            proj.state = 'stopped';
+            proj.velocity.set(0, 0, 0);
+
+            // Notify that ball has stabilized
+            if (!proj.notifiedStabilized && onBallStabilizedCallback) {
+              proj.notifiedStabilized = true;
+              onBallStabilizedCallback(proj);
+            }
           }
         } else {
-          // Decelerate due to rolling friction
-          const friction = physics.rollingFriction * dt;
-          const newSpeed = Math.max(0, horizontalSpeed - friction);
-          const scale = newSpeed / horizontalSpeed;
-          proj.velocity.x *= scale;
-          proj.velocity.z *= scale;
+          // Apply rolling friction (plus extra friction on slopes)
+          const totalFriction = (physics.rollingFriction + extraFriction) * dt;
+          const newSpeed = Math.max(0, speed - totalFriction);
+          const scale = speed > 0 ? newSpeed / speed : 0;
+          proj.velocity.multiplyScalar(scale);
 
           // Move the ball
           proj.mesh.position.addScaledVector(proj.velocity, dt);
 
+          // Re-adjust Y to terrain after horizontal movement
+          const newGroundHeight = getGroundHeight(proj.mesh.position.x, proj.mesh.position.z);
+          proj.mesh.position.y = newGroundHeight + ballRadius;
+
           // Rotate the ball based on movement (visual effect)
-          const rollDistance = horizontalSpeed * dt;
+          const rollDistance = speed * dt;
           const rollAngle = rollDistance / ballRadius;
           // Rotate around the axis perpendicular to velocity
-          const rollAxis = new THREE.Vector3(-proj.velocity.z, 0, proj.velocity.x).normalize();
-          if (rollAxis.length() > 0) {
-            proj.mesh.rotateOnWorldAxis(rollAxis, rollAngle);
+          if (speed > 0.01) {
+            const rollAxis = new THREE.Vector3(-proj.velocity.z, 0, proj.velocity.x).normalize();
+            if (rollAxis.lengthSq() > 0.001) {
+              proj.mesh.rotateOnWorldAxis(rollAxis, rollAngle);
+            }
           }
         }
       }

@@ -502,7 +502,7 @@
     const howitzerData = createHowitzer(scene, CONFIG.buildCannonConfig(gameSession.currentHole));
     const firingAnim = createFiringAnimation();
     const cannonControls = createCannonControls(howitzerData);
-    const projectileSystem = createProjectileSystem(scene, howitzerData, firingAnim);
+    const projectileSystem = createProjectileSystem(scene, howitzerData, firingAnim, terrain);
 
     // ========== FLAG ==========
     const flag = createFlag(CONFIG.FLAG);
