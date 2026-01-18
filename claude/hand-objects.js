@@ -148,8 +148,6 @@ function createElevationIndicator() {
   downHead.rotation.z = Math.PI; // Point downward
   group.add(downHead);
 
-  // Rotate -45 degrees on Z to compensate for wrench tilt and appear vertical
-  group.rotation.z = -Math.PI / 4;
   group.visible = false;
 
   return group;
