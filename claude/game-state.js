@@ -151,6 +151,20 @@ export function createGameState(callbacks) {
             return;
           }
         }
+        // For adjust-cannon, check position and determine which controls to show
+        if (stage.id === 'adjust-cannon' && callbacks.tryAdjustCannon) {
+          const result = callbacks.tryAdjustCannon(state.gameUIVisible);
+          if (result.blocked) {
+            // Player too far, wrench shake triggered
+            return;
+          }
+          // Show appropriate panel variant based on position
+          state.gameUIVisible = !state.gameUIVisible;
+          if (callbacks.setGameUIVisible) {
+            callbacks.setGameUIVisible(result.panelType, state.gameUIVisible);
+          }
+          return;
+        }
         state.gameUIVisible = !state.gameUIVisible;
         if (callbacks.setGameUIVisible) {
           callbacks.setGameUIVisible(stage.gameUI, state.gameUIVisible);

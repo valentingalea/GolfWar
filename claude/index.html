@@ -333,7 +333,7 @@
     import { createFirstPersonHands } from './hands.js';
     import { createMobileControls, isMobileDevice } from './mobile-controls.js';
     import { createGameState } from './game-state.js';
-    import { createHandObjects, updateHandObjectAnimations, triggerButtonPress } from './hand-objects.js';
+    import { createHandObjects, updateHandObjectAnimations, triggerButtonPress, triggerWrenchShake, setWrenchMode, getWrenchMode } from './hand-objects.js';
     import { createGameUI } from './game-ui.js';
     import { createTerrain, createFlatColoredTerrain } from './terrain-renderer.js';
     import * as CONFIG from './config.js';
@@ -604,6 +604,11 @@
         // Hide any game UI
         gameUI.hide();
 
+        // Reset wrench mode when leaving adjust-cannon
+        if (stage.id === 'adjust-cannon') {
+          setWrenchMode(handObjects, 'none');
+        }
+
         if (stage.id === 'drone-view') {
           const result = droneSystem.toggle(yaw, pitch);
           if (result && !result.active) {
@@ -621,8 +626,8 @@
       setGameUIVisible: (panelType, visible) => {
         if (visible) {
           gameUI.show(panelType);
-          // Sync cannon display values when showing cannon panel
-          if (panelType === 'cannon') {
+          // Sync cannon display values when showing any cannon panel variant
+          if (panelType === 'cannon' || panelType === 'cannon-rotation' || panelType === 'cannon-elevation') {
             gameUI.updateCannonDisplay(cannonControls.getRotation(), cannonControls.getElevation());
           }
         } else {
@@ -649,6 +654,51 @@
         }
 
         return false;
+      },
+
+      // Try to adjust cannon based on player position
+      tryAdjustCannon: (currentlyVisible) => {
+        // If closing panel, always allow
+        if (currentlyVisible) {
+          return { blocked: false, panelType: 'cannon' };
+        }
+
+        // Get cannon position and player position
+        const cannonPos = projectileSystem.getCannonPosition();
+        const playerPos = camera.position.clone();
+        playerPos.y = 0; // Ignore height difference
+        const cannonPosFlat = cannonPos.clone();
+        cannonPosFlat.y = 0;
+
+        const distance = playerPos.distanceTo(cannonPosFlat);
+
+        // Too far - shake wrench and block
+        if (distance > CONFIG.CANNON.adjustDistance) {
+          triggerWrenchShake(handObjects);
+          return { blocked: true };
+        }
+
+        // Close enough - use current wrench mode to determine panel type
+        const currentMode = getWrenchMode(handObjects);
+        if (currentMode === 'rotation') {
+          return { blocked: false, panelType: 'cannon-rotation' };
+        } else if (currentMode === 'elevation') {
+          return { blocked: false, panelType: 'cannon-elevation' };
+        } else {
+          // Fallback: determine mode now
+          const rotationRad = (cannonControls.getRotation() * Math.PI) / 180;
+          const forward = new THREE.Vector3(Math.sin(rotationRad), 0, Math.cos(rotationRad));
+          const toPlayer = playerPos.clone().sub(cannonPosFlat).normalize();
+          const dotForward = forward.dot(toPlayer);
+
+          if (dotForward > 0.3) {
+            // Behind cannon (breech side) - rotation mode
+            return { blocked: false, panelType: 'cannon-rotation' };
+          } else {
+            // Sides or front - elevation mode
+            return { blocked: false, panelType: 'cannon-elevation' };
+          }
+        }
       },
 
       fireCannon: () => {
@@ -755,6 +805,8 @@
     // Setup Game UI callbacks
     gameUI.onHide(() => {
       gameState.hideGameUI();
+      // Reset wrench mode when cannon UI is closed
+      setWrenchMode(handObjects, 'none');
     });
 
     // Sync Game UI with cannon controls
@@ -937,6 +989,36 @@
 
       // Update projectiles
       projectileSystem.update(dt);
+
+      // Continuous position check for adjust-cannon stage (update wrench indicators)
+      if (gameState.getCurrentStage().id === 'adjust-cannon' && !gameUI.isVisible()) {
+        const cannonPos = projectileSystem.getCannonPosition();
+        const playerPos = camera.position.clone();
+        playerPos.y = 0;
+        const cannonPosFlat = cannonPos.clone();
+        cannonPosFlat.y = 0;
+
+        const distance = playerPos.distanceTo(cannonPosFlat);
+
+        if (distance <= CONFIG.CANNON.adjustDistance) {
+          // Within range - determine mode based on position
+          const rotationRad = (cannonControls.getRotation() * Math.PI) / 180;
+          const forward = new THREE.Vector3(Math.sin(rotationRad), 0, Math.cos(rotationRad));
+          const toPlayer = playerPos.clone().sub(cannonPosFlat).normalize();
+          const dotForward = forward.dot(toPlayer);
+
+          if (dotForward > 0.3) {
+            // Behind cannon (breech side) - rotation mode
+            setWrenchMode(handObjects, 'rotation');
+          } else {
+            // Sides or front - elevation mode
+            setWrenchMode(handObjects, 'elevation');
+          }
+        } else {
+          // Out of range - hide indicators
+          setWrenchMode(handObjects, 'none');
+        }
+      }
 
       // Update hand object animations
       updateHandObjectAnimations(handObjects, gameState.getCurrentStage().id, dt);

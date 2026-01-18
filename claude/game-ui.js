@@ -47,14 +47,14 @@ export function createGameUI() {
   const cannonPanel = document.createElement('div');
   cannonPanel.id = 'game-ui-cannon';
   cannonPanel.innerHTML = `
-    <h3 style="margin: 0 0 16px 0; text-align: center; color: #fc8;">Cannon Adjust</h3>
-    <div class="game-ui-row">
+    <h3 id="cannonPanelTitle" style="margin: 0 0 16px 0; text-align: center; color: #fc8;">Cannon Adjust</h3>
+    <div id="cannonRotationRow" class="game-ui-row">
       <span class="game-ui-label">Rotation</span>
       <span id="gameRotationValue" class="game-ui-value">0°</span>
       <button id="gameRotLeft" class="game-ui-btn">&lt;</button>
       <button id="gameRotRight" class="game-ui-btn">&gt;</button>
     </div>
-    <div class="game-ui-row">
+    <div id="cannonElevationRow" class="game-ui-row">
       <span class="game-ui-label">Elevation</span>
       <span id="gameElevationValue" class="game-ui-value">40°</span>
       <button id="gameElevDown" class="game-ui-btn">-</button>
@@ -143,7 +143,31 @@ export function createGameUI() {
   function show(panelType) {
     overlay.style.display = 'block';
     projectilePanel.style.display = panelType === 'projectile' ? 'block' : 'none';
-    cannonPanel.style.display = panelType === 'cannon' ? 'block' : 'none';
+
+    // Handle cannon panel variants
+    const isCannonPanel = panelType === 'cannon' || panelType === 'cannon-rotation' || panelType === 'cannon-elevation';
+    cannonPanel.style.display = isCannonPanel ? 'block' : 'none';
+
+    if (isCannonPanel) {
+      const titleEl = document.getElementById('cannonPanelTitle');
+      const rotationRow = document.getElementById('cannonRotationRow');
+      const elevationRow = document.getElementById('cannonElevationRow');
+
+      if (panelType === 'cannon-rotation') {
+        titleEl.textContent = 'Cannon Rotation';
+        rotationRow.style.display = 'flex';
+        elevationRow.style.display = 'none';
+      } else if (panelType === 'cannon-elevation') {
+        titleEl.textContent = 'Cannon Elevation';
+        rotationRow.style.display = 'none';
+        elevationRow.style.display = 'flex';
+      } else {
+        titleEl.textContent = 'Cannon Adjust';
+        rotationRow.style.display = 'flex';
+        elevationRow.style.display = 'flex';
+      }
+    }
+
     currentPanel = panelType;
   }
 

@@ -158,9 +158,16 @@ const handObjects = createHandObjects();
 
 updateHandObjectAnimations(handObjects, currentStageId, dt); // Call in loop
 triggerButtonPress(handObjects);  // Animate button press
+
+// Wrench mode controls (for position-aware cannon adjustment)
+triggerWrenchShake(handObjects);          // Shake animation when too far
+setWrenchMode(handObjects, 'rotation');   // Show rotating arrow indicator
+setWrenchMode(handObjects, 'elevation');  // Show up/down arrow indicator
+setWrenchMode(handObjects, 'none');       // Hide all indicators
+getWrenchMode(handObjects);               // Get current mode
 ```
 
-**Drone model has animated rotors**, button-box has press animation.
+**Animations**: Drone rotors spin, button-box has press animation, wrench has shake animation and rotating/bobbing arrow indicators.
 
 ### Game UI (`game-ui.js`)
 
@@ -307,6 +314,44 @@ const gameSession = {
 3. After configurable delay, force-transition to drone-view
 4. Player can track ball from above
 
+### Position-Aware Cannon Adjustment
+The "Adjust Cannon" stage requires proximity and behaves differently based on player position:
+
+1. **Too far (>2m)**: Wrench shakes on action press to indicate not allowed
+2. **Breech side (<2m, behind cannon where you load)**:
+   - Rotating arrow appears on wrench (parallel to floor, spins continuously)
+   - Action opens rotation controls only
+3. **Sides/front (<2m)**:
+   - Up/down arrow appears on wrench (vertical, bobs continuously)
+   - Action opens elevation controls only
+
+**Indicators appear continuously** when within range, not just on action press.
+
+**Configuration** (`config.js`):
+```javascript
+CANNON.adjustDistance: 2.0  // Max distance to adjust cannon
+```
+
+**Implementation** (`index.html`):
+- Continuous position check in animation loop updates wrench mode
+- `tryAdjustCannon` callback handles action button press
+- Uses dot product with cannon forward vector
+- `dotForward > 0.3` = breech side (rotation mode)
+- Otherwise = sides/front (elevation mode)
+
+**Hand object modes** (`hand-objects.js`):
+```javascript
+setWrenchMode(handObjects, 'rotation'); // Show rotating arrow (parallel to floor)
+setWrenchMode(handObjects, 'elevation'); // Show up/down arrow (vertical)
+setWrenchMode(handObjects, 'none');      // Hide indicators
+triggerWrenchShake(handObjects);         // Animate shake on failed action
+```
+
+**Panel types** (`game-ui.js`):
+- `'cannon'` - Full panel (rotation + elevation)
+- `'cannon-rotation'` - Rotation controls only
+- `'cannon-elevation'` - Elevation controls only
+
 ## Debug UI Structure
 
 **Shared section** (always visible):
@@ -386,10 +431,13 @@ The `trees.js` module provides procedural tree placement for heightmap-based ter
 
 ## Last Updated
 
-January 2025 - Terrain collision physics:
-- `cannon.js`: Ball now collides with terrain heightmap
-  - Bounce reflects off terrain normals
-  - Rolling follows slope with gravity projection
-  - Extra friction on steep slopes
-- `terrain-renderer.js`: Wireframe overlay, vertex coloring
-- `terrain-heightmap.js`: Heightmap loading from JSON + binary
+January 2025 - Position-aware cannon adjustment:
+- `hand-objects.js`: Wrench shake animation, rotation/elevation indicators
+- `game-ui.js`: Partial panel display (rotation-only, elevation-only)
+- `game-state.js`: tryAdjustCannon callback for position-based behavior
+- `index.html`: Position detection logic using cannon forward vector
+
+Previous updates:
+- Terrain collision physics in `cannon.js`
+- Wireframe overlay and vertex coloring in `terrain-renderer.js`
+- Heightmap loading from JSON + binary in `terrain-heightmap.js`
