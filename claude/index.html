@@ -328,6 +328,7 @@
     import { setupRenderer, createLighting } from './lighting.js';
     import { createSkybox, createSun, setupHourControl } from './sun.js';
     import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createProjectileSystem } from './cannon.js';
+    import { createMortar, createMortarControls, createMortarFiringAnimation, updateMortarFiringAnimation } from './mortar.js';
     import { createFlag, positionFlag } from './flag.js';
     import { createDroneSystem } from './drone.js';
     import { createFirstPersonHands } from './hands.js';
@@ -503,6 +504,16 @@
     const firingAnim = createFiringAnimation();
     const cannonControls = createCannonControls(howitzerData);
     const projectileSystem = createProjectileSystem(scene, howitzerData, firingAnim, terrain);
+
+    // ========== MORTAR (TEST) ==========
+    // Placed at origin for testing - will be used for "putting" phase
+    const mortarData = createMortar(scene, {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: 0,
+      scale: 1.0
+    });
+    const mortarControls = createMortarControls(mortarData);
+    const mortarFiringAnim = createMortarFiringAnimation();
 
     // ========== FLAG ==========
     const flag = createFlag(CONFIG.FLAG);
@@ -984,8 +995,9 @@
       // Update drone system
       droneSystem.update(dt, moveForward, moveRight, yaw);
 
-      // Update firing animation
+      // Update firing animations
       updateFiringAnimation(firingAnim, howitzerData, dt);
+      updateMortarFiringAnimation(mortarFiringAnim, mortarData, dt);
 
       // Update projectiles
       projectileSystem.update(dt);
