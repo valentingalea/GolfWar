@@ -22,6 +22,8 @@ GolfWar/
     ├── config.js       # Centralized game configuration
     ├── game-state.js   # 6-stage state machine
     ├── cannon.js       # Howitzer model, firing, projectile physics
+    ├── mortar.js       # M252 mortar model for "putting" phase
+    ├── Mortar.md       # Mortar technical reference documentation
     ├── drone.js        # Aerial camera view system
     ├── hands.js        # First-person hands rig
     ├── hand-objects.js # 3D objects held in hands per stage
@@ -107,6 +109,40 @@ projectileSystem.onBallStabilized(callback);     // Register callback
 - Ball stays on terrain surface during rolling
 - Slow roll detection: force-stops after 2s of slow movement on shallow slopes
 - Pass terrain to: `createProjectileSystem(scene, howitzer, firingAnim, terrain)`
+
+### Mortar System (`mortar.js`)
+
+M252-style 81mm mortar for the "putting" phase (close to flag). See `Mortar.md` for detailed specs.
+
+```javascript
+// Create mortar
+const mortarData = createMortar(scene, { position, rotation, scale });
+
+// Mortar controls (limited traverse compared to howitzer)
+const mortarControls = createMortarControls(mortarData);
+mortarControls.adjustRotation(delta);   // ±30° max traverse
+mortarControls.adjustElevation(delta);  // 45-85° (high-angle weapon)
+
+// Firing animation
+const mortarFiringAnim = createMortarFiringAnimation();
+updateMortarFiringAnimation(mortarFiringAnim, mortarData, dt); // In loop
+
+// Position helpers
+setMortarPosition(mortarData, { x, y, z });
+getMortarPosition(mortarData);          // THREE.Vector3
+getMortarMuzzlePosition(mortarData);    // World coords for projectile spawn
+getMortarFiringDirection(mortarData);   // Normalized direction vector
+```
+
+**Key Differences from Howitzer**:
+| Feature | Howitzer | Mortar |
+|---------|----------|--------|
+| Size | ~3m long | 1.27m tube |
+| Elevation | 0-80° | 45-85° (high angle) |
+| Traverse | Full rotation | ±30° limited |
+| Mobility | Wheeled carriage | Baseplate + bipod |
+| Color | Dark metal grays | Olive drab green |
+| Intended Use | Long range shots | "Putting" phase |
 
 ### Drone System (`drone.js`)
 
@@ -384,12 +420,13 @@ The `trees.js` module provides procedural tree placement for heightmap-based ter
 
 | File | Lines | Notes |
 |------|-------|-------|
-| cannon.js | ~760 | Most complex - model + physics + animation |
 | index.html | ~975 | Main orchestration, async init, event handling |
-| hand-objects.js | ~320 | 5 hand object models |
+| cannon.js | ~760 | Howitzer model + physics + animation |
+| mortar.js | ~465 | M252 mortar model + controls + firing animation |
 | mobile-controls.js | ~350 | Touch controls system |
 | trees.js | ~350 | Procedural tree placement |
 | terrain-heightmap.js | ~320 | Heightmap loading from binary |
+| hand-objects.js | ~320 | 5 hand object models |
 | terrain-renderer.js | ~250 | Vertex coloring + terrain API |
 | drone.js | ~250 | Drone view with transition |
 | hands.js | ~230 | First-person hands model |
@@ -431,13 +468,14 @@ The `trees.js` module provides procedural tree placement for heightmap-based ter
 
 ## Last Updated
 
-January 2025 - Position-aware cannon adjustment:
-- `hand-objects.js`: Wrench shake animation, rotation/elevation indicators
-- `game-ui.js`: Partial panel display (rotation-only, elevation-only)
-- `game-state.js`: tryAdjustCannon callback for position-based behavior
-- `index.html`: Position detection logic using cannon forward vector
+January 2025 - M252 Mortar for putting phase:
+- `mortar.js`: New module with M252-style mortar model, controls, firing animation
+- `Mortar.md`: Technical reference documentation with specs and implementation details
+- `index.html`: Mortar instantiation for testing
+- See `Mortar.md` for detailed specifications
 
 Previous updates:
+- Position-aware cannon adjustment (wrench modes, partial panels)
 - Terrain collision physics in `cannon.js`
 - Wireframe overlay and vertex coloring in `terrain-renderer.js`
 - Heightmap loading from JSON + binary in `terrain-heightmap.js`
