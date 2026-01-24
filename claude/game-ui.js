@@ -1,4 +1,5 @@
 // Game UI - center screen overlays for stage-specific controls
+import { ENVELOPE_MAP } from './config.js';
 
 // Create Game UI system
 export function createGameUI() {
@@ -59,10 +60,146 @@ export function createGameUI() {
       { label: 'Roll', value: 'roll' },
       { label: 'Bounce', value: 'bounce' }
     ], 'roll')}
+    <canvas id="envelopeCanvas" width="260" height="120" style="
+      display: block;
+      margin: 14px auto 0;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    "></canvas>
     <div class="game-ui-hint">Press F to close</div>
   `;
   projectilePanel.style.display = 'none';
   overlay.appendChild(projectilePanel);
+
+  // Envelope preview graph
+  const envelopeCanvas = projectilePanel.querySelector('#envelopeCanvas');
+  const envelopeCtx = envelopeCanvas.getContext('2d');
+
+  function computeEnvelopePoints(kick, hang, brk) {
+    const yLaunch = ENVELOPE_MAP.kick[kick] || 0;
+    const yMid = ENVELOPE_MAP.hang[hang] || 0;
+    const yImpact = ENVELOPE_MAP.break[brk] || 0;
+
+    return [
+      { x: 0.0, y: yLaunch * 0.85 },
+      { x: 0.2, y: yLaunch },
+      { x: 0.5, y: yMid },
+      { x: 0.8, y: yImpact },
+      { x: 1.0, y: yImpact * 0.85 }
+    ];
+  }
+
+  function renderEnvelope() {
+    const w = envelopeCanvas.width;
+    const h = envelopeCanvas.height;
+    const ctx = envelopeCtx;
+
+    // Get current selections (only kick/hang/break affect envelope)
+    const kickVal = document.querySelector('#shotKick .shot-btn.active');
+    const hangVal = document.querySelector('#shotHang .shot-btn.active');
+    const breakVal = document.querySelector('#shotBreak .shot-btn.active');
+    const kick = kickVal ? kickVal.dataset.value : 'full';
+    const hang = hangVal ? hangVal.dataset.value : 'carry';
+    const brk = breakVal ? breakVal.dataset.value : 'roll';
+
+    const points = computeEnvelopePoints(kick, hang, brk);
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Padding for labels
+    const padL = 38, padR = 8, padT = 16, padB = 18;
+    const gw = w - padL - padR;
+    const gh = h - padT - padB;
+
+    // Draw phase bands
+    const bandWidth = gw / 3;
+    const bandColors = ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.07)', 'rgba(255,255,255,0.04)'];
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = bandColors[i];
+      ctx.fillRect(padL + i * bandWidth, padT, bandWidth, gh);
+    }
+
+    // Draw center line (dashed)
+    const centerY = padT + gh / 2;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(padL, centerY);
+    ctx.lineTo(padL + gw, centerY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Convert normalized points to canvas coords
+    // y: +1 = top, -1 = bottom (inverted for canvas)
+    function toCanvas(pt) {
+      return {
+        x: padL + pt.x * gw,
+        y: centerY - pt.y * (gh / 2) * 0.85
+      };
+    }
+
+    const canvasPoints = points.map(toCanvas);
+
+    // Draw smooth curve using Catmull-Rom-like cubic bezier segments
+    ctx.strokeStyle = '#8cf';
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = 'rgba(136, 204, 255, 0.6)';
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.moveTo(canvasPoints[0].x, canvasPoints[0].y);
+
+    const tension = 0.3;
+    for (let i = 0; i < canvasPoints.length - 1; i++) {
+      const p0 = canvasPoints[Math.max(0, i - 1)];
+      const p1 = canvasPoints[i];
+      const p2 = canvasPoints[i + 1];
+      const p3 = canvasPoints[Math.min(canvasPoints.length - 1, i + 2)];
+
+      const cp1x = p1.x + (p2.x - p0.x) * tension;
+      const cp1y = p1.y + (p2.y - p0.y) * tension;
+      const cp2x = p2.x - (p3.x - p1.x) * tension;
+      const cp2y = p2.y - (p3.y - p1.y) * tension;
+
+      ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Draw control point dots
+    ctx.fillStyle = 'rgba(136, 204, 255, 0.8)';
+    for (let i = 1; i <= 3; i++) {
+      ctx.beginPath();
+      ctx.arc(canvasPoints[i].x, canvasPoints[i].y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Labels
+    ctx.font = '9px monospace';
+    ctx.textBaseline = 'middle';
+
+    // Y-axis labels
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.textAlign = 'left';
+    ctx.fillText('AIR', 2, padT + 10);
+    ctx.fillText('GND', 2, padT + gh - 8);
+
+    // X-axis labels
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    const labelY = padT + gh + 5;
+    ctx.fillText('Launch', padL + bandWidth * 0.5, labelY);
+    ctx.fillText('Flight', padL + bandWidth * 1.5, labelY);
+    ctx.fillText('Impact', padL + bandWidth * 2.5, labelY);
+
+    // Caption
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.font = '8px monospace';
+    ctx.fillText('Behaviour Envelope', w - 6, 3);
+  }
 
   // Wire up shot group button clicks
   projectilePanel.querySelectorAll('.shot-group').forEach(group => {
@@ -71,6 +208,7 @@ export function createGameUI() {
       if (!btn) return;
       group.querySelectorAll('.shot-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+      renderEnvelope();
     });
   });
 
@@ -199,6 +337,9 @@ export function createGameUI() {
   function show(panelType) {
     overlay.style.display = 'block';
     projectilePanel.style.display = panelType === 'projectile' ? 'block' : 'none';
+    if (panelType === 'projectile') {
+      renderEnvelope();
+    }
 
     // Handle cannon panel variants
     const isCannonPanel = panelType === 'cannon' || panelType === 'cannon-rotation' || panelType === 'cannon-elevation';

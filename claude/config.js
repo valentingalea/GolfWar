@@ -128,6 +128,15 @@ export const SHOT_PROFILE = {
   chargeCoupling: { heavy: 0.05, light: -0.03 }
 };
 
+// ========== ENVELOPE PREVIEW MAP ==========
+// Normalized Y-axis values (-1..+1) for the behaviour envelope graph
+// Positive = AIR/CARRY bias, Negative = GROUND/ROLL bias
+export const ENVELOPE_MAP = {
+  kick:  { chip: -0.35, full: 0.00, crush: +0.35 },
+  hang:  { punch: -0.45, carry: 0.00, loft: +0.45 },
+  break: { stick: -0.40, roll: 0.00, bounce: +0.40 }
+};
+
 // ========== FIRING ANIMATION SETTINGS ==========
 export const FIRING = {
   duration: 1.2,
