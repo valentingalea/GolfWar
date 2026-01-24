@@ -1,4 +1,4 @@
-// Cannon/Howitzer module - model, controls, projectiles, firing animation
+// Cannon/Howitzer module - model, controls, firing animation
 import * as THREE from 'three';
 
 // Materials shared across howitzer components
@@ -58,25 +58,6 @@ function createTrail(side) {
 
   trailGroup.position.x = side * 0.5;
   return trailGroup;
-}
-
-// Create smoke particle texture
-function createSmokeTexture() {
-  const size = 64;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
-  gradient.addColorStop(0, 'rgba(200, 200, 200, 1)');
-  gradient.addColorStop(0.3, 'rgba(180, 180, 180, 0.8)');
-  gradient.addColorStop(0.6, 'rgba(150, 150, 150, 0.4)');
-  gradient.addColorStop(1, 'rgba(100, 100, 100, 0)');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
 }
 
 // Create muzzle flash texture
@@ -433,410 +414,39 @@ export function createCannonControls(howitzer) {
   };
 }
 
-// Projectile system with smoke trails and bounce physics
-// terrain parameter is optional - if provided, ball collides with heightmap
-export function createProjectileSystem(scene, howitzer, firingAnim, terrain = null) {
-  const projectiles = [];
-  const smokeParticles = [];
-  const gravity = new THREE.Vector3(0, -9.81, 0);
-  const ballRadius = 0.15;
-  const geometry = new THREE.SphereGeometry(ballRadius, 16, 16);
-  const material = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    roughness: 0.2,
-    metalness: 0.1
-  });
-
-  // Cannon loaded state
-  let isLoaded = false;
-  let onBallStabilizedCallback = null;
-
-  // Physics constants
-  const physics = {
-    baseRestitution: 0.65,    // Base bounciness (0-1), slightly lower for terrain
-    friction: 0.35,           // Velocity loss on bounce (tangent to surface)
-    rollingFriction: 2.5,     // Deceleration when rolling (m/s²)
-    minBounceVelocity: 0.5,   // Below this, stop bouncing
-    minRollVelocity: 0.1,     // Below this, stop completely
-    slopeFriction: 0.4,       // Additional friction on steep slopes
-    slowRollSpeed: 0.5,       // Speed considered "slow rolling"
-    maxSlowRollTime: 2.0      // Max seconds of slow rolling before force-stop
-  };
-
-  // Helper: get ground height at position (uses terrain if available)
-  function getGroundHeight(x, z) {
-    if (terrain && terrain.getHeightAt) {
-      return terrain.getHeightAt(x, z);
-    }
-    return 0; // Flat ground fallback
-  }
-
-  // Helper: get ground normal at position
-  function getGroundNormal(x, z) {
-    if (terrain && terrain.getNormalAt) {
-      return terrain.getNormalAt(x, z);
-    }
-    return new THREE.Vector3(0, 1, 0); // Flat ground fallback
-  }
-
-  // Helper: reflect velocity off surface with restitution
-  function reflectVelocity(velocity, normal, restitution, friction) {
-    // Decompose velocity into normal and tangent components
-    const vDotN = velocity.dot(normal);
-    const normalComponent = normal.clone().multiplyScalar(vDotN);
-    const tangentComponent = velocity.clone().sub(normalComponent);
-
-    // Reflect normal component with energy loss (restitution)
-    const reflectedNormal = normalComponent.multiplyScalar(-restitution);
-
-    // Apply friction to tangent component
-    const reflectedTangent = tangentComponent.multiplyScalar(1 - friction);
-
-    // Combine
-    return reflectedNormal.add(reflectedTangent);
-  }
-
-  // Smoke trail settings
-  const smokeTexture = createSmokeTexture();
-  const smokeConfig = {
-    spawnRate: 0.02,      // Time between smoke spawns (seconds)
-    lifetime: 2.0,        // How long smoke particles live
-    startSize: 0.3,       // Initial size
-    endSize: 1.5,         // Size at end of life
-    startOpacity: 0.6,    // Initial opacity
-    drift: 0.5            // Random drift speed
-  };
-
-  const velocityInput = document.getElementById('velocityInput');
-  const massInput = document.getElementById('massInput');
+// Howitzer weapon adapter for the projectile system
+export function createHowitzerAdapter(howitzerData, firingAnim) {
   const recoilSpeedInput = document.getElementById('recoilSpeedInput');
   const outerRecoilSpeedInput = document.getElementById('outerRecoilSpeedInput');
 
-  function createSmokeParticle(position) {
-    const smokeMaterial = new THREE.SpriteMaterial({
-      map: smokeTexture,
-      transparent: true,
-      opacity: smokeConfig.startOpacity,
-      depthWrite: false
-    });
-    const smoke = new THREE.Sprite(smokeMaterial);
-    smoke.position.copy(position);
-    smoke.scale.setScalar(smokeConfig.startSize);
-    scene.add(smoke);
-
-    return {
-      sprite: smoke,
-      age: 0,
-      drift: new THREE.Vector3(
-        (Math.random() - 0.5) * smokeConfig.drift,
-        Math.random() * smokeConfig.drift * 0.5,
-        (Math.random() - 0.5) * smokeConfig.drift
-      )
-    };
-  }
-
-  function fire() {
-    // Cannot fire if not loaded
-    if (!isLoaded) {
-      return false;
-    }
-
-    const velocity = parseFloat(velocityInput.value) || 20;
-    const mass = parseFloat(massInput.value) || 10;
-    const recoilSpeed = parseFloat(recoilSpeedInput.value) || 2;
-    const outerRecoilSpeed = parseFloat(outerRecoilSpeedInput.value) || 4;
-
-    firingAnim.barrelRecoilSpeed = recoilSpeed;
-    firingAnim.outerRecoilSpeed = outerRecoilSpeed;
-
-    const projectile = new THREE.Mesh(geometry, material);
-    projectile.castShadow = true;
-
-    const muzzleLocal = new THREE.Vector3(0, 0.05, howitzer.innerBarrelLength + 0.9);
-    const muzzleWorld = muzzleLocal.clone();
-    howitzer.elevatingGroup.localToWorld(muzzleWorld);
-
-    projectile.position.copy(muzzleWorld);
-    scene.add(projectile);
-
-    const direction = new THREE.Vector3(0, 0, 1);
-    direction.applyQuaternion(howitzer.elevatingGroup.getWorldQuaternion(new THREE.Quaternion()));
-    direction.normalize();
-
-    projectiles.push({
-      mesh: projectile,
-      velocity: direction.multiplyScalar(velocity),
-      mass: mass,
-      smokeTimer: 0,
-      state: 'flying',      // flying, bouncing, rolling, stopped
-      bounceCount: 0,
-      slowRollTime: 0,      // Time spent rolling slowly (for stuck detection)
-      notifiedStabilized: false,
-      launchPosition: muzzleWorld.clone()  // Track launch position for distance calculation
-    });
-
-    // Unload cannon after firing
-    isLoaded = false;
-    howitzer.loadedBall.visible = false;
-
-    firingAnim.active = true;
-    firingAnim.time = 0;
-    howitzer.muzzleFlash.material.opacity = 1;
-
-    return true;
-  }
-
-  function update(dt) {
-    // Update projectiles with physics
-    for (let i = projectiles.length - 1; i >= 0; i--) {
-      const proj = projectiles[i];
-
-      if (proj.state === 'stopped') {
-        // Ball is at rest, do nothing
-        continue;
-      }
-
-      if (proj.state === 'flying' || proj.state === 'bouncing') {
-        // Apply gravity
-        proj.velocity.addScaledVector(gravity, dt);
-        proj.mesh.position.addScaledVector(proj.velocity, dt);
-
-        // Spawn smoke particles (only while in the air and moving fast)
-        if (proj.velocity.length() > 5) {
-          proj.smokeTimer += dt;
-          if (proj.smokeTimer >= smokeConfig.spawnRate) {
-            proj.smokeTimer = 0;
-            smokeParticles.push(createSmokeParticle(proj.mesh.position));
-          }
-        }
-
-        // Get terrain height at ball position
-        const groundHeight = getGroundHeight(proj.mesh.position.x, proj.mesh.position.z);
-        const floorHeight = groundHeight + ballRadius;
-
-        // Check terrain collision
-        if (proj.mesh.position.y <= floorHeight) {
-          // Place ball on terrain surface
-          proj.mesh.position.y = floorHeight;
-
-          // Get terrain normal for bounce calculation
-          const normal = getGroundNormal(proj.mesh.position.x, proj.mesh.position.z);
-
-          // Calculate impact speed (component into the surface)
-          const impactSpeed = Math.abs(proj.velocity.dot(normal));
-
-          if (impactSpeed < physics.minBounceVelocity) {
-            // Too slow to bounce, start rolling
-            proj.state = 'rolling';
-            // Remove velocity component into ground
-            const vDotN = proj.velocity.dot(normal);
-            if (vDotN < 0) {
-              proj.velocity.sub(normal.clone().multiplyScalar(vDotN));
-            }
-          } else {
-            // Bounce!
-            proj.state = 'bouncing';
-            proj.bounceCount++;
-
-            // Calculate restitution based on mass and impact speed
-            const massRatio = Math.min(proj.mass / 20, 1.5);
-            const speedFactor = Math.max(0.8, 1 - impactSpeed * 0.005);
-            const restitution = physics.baseRestitution * massRatio * speedFactor;
-
-            // Reflect velocity off terrain normal
-            proj.velocity.copy(
-              reflectVelocity(proj.velocity, normal, Math.min(restitution, 0.95), physics.friction)
-            );
-          }
-        }
-      }
-
-      if (proj.state === 'rolling') {
-        // Get terrain height and normal at current position
-        const groundHeight = getGroundHeight(proj.mesh.position.x, proj.mesh.position.z);
-        const normal = getGroundNormal(proj.mesh.position.x, proj.mesh.position.z);
-
-        // Keep ball on terrain surface
-        proj.mesh.position.y = groundHeight + ballRadius;
-
-        // Calculate slope direction (gravity component along surface)
-        // slopeDir = gravity - (gravity · normal) * normal
-        const gravityDotNormal = gravity.dot(normal);
-        const slopeAccel = gravity.clone().sub(normal.clone().multiplyScalar(gravityDotNormal));
-
-        // Apply slope acceleration (ball rolls downhill)
-        proj.velocity.addScaledVector(slopeAccel, dt);
-
-        // Remove any velocity component into the ground
-        const vDotN = proj.velocity.dot(normal);
-        if (vDotN < 0) {
-          proj.velocity.sub(normal.clone().multiplyScalar(vDotN));
-        }
-
-        // Calculate speed for friction and stopping
-        const speed = proj.velocity.length();
-
-        // Calculate slope steepness for extra friction on steep slopes
-        const slopeSteepness = 1 - normal.y; // 0 = flat, 1 = vertical
-        const extraFriction = slopeSteepness * physics.slopeFriction;
-
-        // Track slow rolling time (to detect stuck on shallow slopes)
-        if (speed < physics.slowRollSpeed) {
-          proj.slowRollTime += dt;
-        } else {
-          proj.slowRollTime = 0; // Reset if moving fast enough
-        }
-
-        // Force stop if rolling slowly for too long (stuck on shallow slope)
-        const forceStop = proj.slowRollTime >= physics.maxSlowRollTime;
-
-        if (speed < physics.minRollVelocity || forceStop) {
-          // Check if slope is steep enough to keep rolling (unless force stopping)
-          if (forceStop || slopeAccel.length() < physics.minRollVelocity * 2) {
-            // Ball stopped
-            proj.state = 'stopped';
-            proj.velocity.set(0, 0, 0);
-
-            // Notify that ball has stabilized
-            if (!proj.notifiedStabilized && onBallStabilizedCallback) {
-              proj.notifiedStabilized = true;
-              onBallStabilizedCallback(proj);
-            }
-          }
-        } else {
-          // Apply rolling friction (plus extra friction on slopes)
-          const totalFriction = (physics.rollingFriction + extraFriction) * dt;
-          const newSpeed = Math.max(0, speed - totalFriction);
-          const scale = speed > 0 ? newSpeed / speed : 0;
-          proj.velocity.multiplyScalar(scale);
-
-          // Move the ball
-          proj.mesh.position.addScaledVector(proj.velocity, dt);
-
-          // Re-adjust Y to terrain after horizontal movement
-          const newGroundHeight = getGroundHeight(proj.mesh.position.x, proj.mesh.position.z);
-          proj.mesh.position.y = newGroundHeight + ballRadius;
-
-          // Rotate the ball based on movement (visual effect)
-          const rollDistance = speed * dt;
-          const rollAngle = rollDistance / ballRadius;
-          // Rotate around the axis perpendicular to velocity
-          if (speed > 0.01) {
-            const rollAxis = new THREE.Vector3(-proj.velocity.z, 0, proj.velocity.x).normalize();
-            if (rollAxis.lengthSq() > 0.001) {
-              proj.mesh.rotateOnWorldAxis(rollAxis, rollAngle);
-            }
-          }
-        }
-      }
-
-      // Remove projectile if too far out of bounds
-      if (proj.mesh.position.length() > 1000) {
-        scene.remove(proj.mesh);
-        projectiles.splice(i, 1);
-      }
-    }
-
-    // Update smoke particles
-    for (let i = smokeParticles.length - 1; i >= 0; i--) {
-      const smoke = smokeParticles[i];
-      smoke.age += dt;
-
-      if (smoke.age >= smokeConfig.lifetime) {
-        // Remove expired smoke
-        scene.remove(smoke.sprite);
-        smoke.sprite.material.dispose();
-        smokeParticles.splice(i, 1);
-      } else {
-        // Update smoke position, size, and opacity
-        const lifeRatio = smoke.age / smokeConfig.lifetime;
-
-        // Drift upward and randomly
-        smoke.sprite.position.addScaledVector(smoke.drift, dt);
-
-        // Grow over time
-        const size = smokeConfig.startSize + (smokeConfig.endSize - smokeConfig.startSize) * lifeRatio;
-        smoke.sprite.scale.setScalar(size);
-
-        // Fade out
-        smoke.sprite.material.opacity = smokeConfig.startOpacity * (1 - lifeRatio);
-      }
-    }
-  }
-
   return {
-    fire,
-    update,
-    // Cannon loading methods
-    loadCannon() {
-      isLoaded = true;
-      howitzer.loadedBall.visible = true;
+    getMuzzlePosition() {
+      const muzzleLocal = new THREE.Vector3(0, 0.05, howitzerData.innerBarrelLength + 0.9);
+      howitzerData.elevatingGroup.localToWorld(muzzleLocal);
+      return muzzleLocal;
     },
-    unloadCannon() {
-      isLoaded = false;
-      howitzer.loadedBall.visible = false;
+    getFiringDirection() {
+      const direction = new THREE.Vector3(0, 0, 1);
+      direction.applyQuaternion(howitzerData.elevatingGroup.getWorldQuaternion(new THREE.Quaternion()));
+      return direction.normalize();
     },
-    isLoaded() {
-      return isLoaded;
+    getPosition() {
+      return howitzerData.group.position.clone();
     },
-    // Check if ball is available (not loaded, not in flight)
-    isBallAvailable() {
-      // Ball is available if cannon is not loaded AND no active projectiles
-      if (isLoaded) return false;
-      // Check if any projectile is still active (not stopped)
-      const hasActiveProjectile = projectiles.some(p => p.state !== 'stopped');
-      return !hasActiveProjectile;
+    setPosition(pos) {
+      howitzerData.group.position.set(pos.x, pos.y, pos.z);
     },
-    // Set callback for when ball stabilizes on ground
-    onBallStabilized(callback) {
-      onBallStabilizedCallback = callback;
+    showLoadedBall(visible) {
+      howitzerData.loadedBall.visible = visible;
     },
-    // Get cannon world position for distance checks
-    getCannonPosition() {
-      return howitzer.group.position.clone();
-    },
-    // Get ball floor distance (horizontal distance from launch position)
-    getBallDistance() {
-      if (projectiles.length === 0) return null;
-      const proj = projectiles[projectiles.length - 1]; // Most recent projectile
-      if (!proj.launchPosition) return null;
-      // Calculate floor (XZ) distance only
-      const dx = proj.mesh.position.x - proj.launchPosition.x;
-      const dz = proj.mesh.position.z - proj.launchPosition.z;
-      return Math.sqrt(dx * dx + dz * dz);
-    },
-    // Get ball position (most recent projectile)
-    getBallPosition() {
-      if (projectiles.length === 0) return null;
-      const proj = projectiles[projectiles.length - 1];
-      return proj.mesh.position.clone();
-    },
-    // Check if ball has stabilized (stopped moving)
-    isBallStabilized() {
-      if (projectiles.length === 0) return false;
-      const proj = projectiles[projectiles.length - 1];
-      return proj.state === 'stopped';
-    },
-    // Clear all projectiles from scene
-    clearProjectiles() {
-      for (const proj of projectiles) {
-        scene.remove(proj.mesh);
-        // Clear smoke trail if exists
-        if (proj.smokeParticles) {
-          for (const particle of proj.smokeParticles) {
-            scene.remove(particle);
-          }
-        }
-      }
-      projectiles.length = 0;
-    },
-    // Move cannon to new position
-    setCannonPosition(pos) {
-      howitzer.group.position.set(pos.x, pos.y, pos.z);
-    },
-    // Get howitzer group for external access
-    getHowitzerGroup() {
-      return howitzer.group;
+    triggerFire() {
+      const recoilSpeed = parseFloat(recoilSpeedInput.value) || 2;
+      const outerRecoilSpeed = parseFloat(outerRecoilSpeedInput.value) || 4;
+      firingAnim.barrelRecoilSpeed = recoilSpeed;
+      firingAnim.outerRecoilSpeed = outerRecoilSpeed;
+      firingAnim.active = true;
+      firingAnim.time = 0;
+      howitzerData.muzzleFlash.material.opacity = 1;
     }
   };
 }

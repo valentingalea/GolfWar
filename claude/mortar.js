@@ -462,3 +462,33 @@ export function getMortarFiringDirection(mortarData) {
   direction.applyQuaternion(mortarData.elevatingGroup.getWorldQuaternion(new THREE.Quaternion()));
   return direction.normalize();
 }
+
+// Mortar weapon adapter for the projectile system
+export function createMortarAdapter(mortarData, firingAnim) {
+  return {
+    getMuzzlePosition() {
+      const muzzleLocal = new THREE.Vector3(0, 0, mortarData.tubeLength + 0.3);
+      mortarData.elevatingGroup.localToWorld(muzzleLocal);
+      return muzzleLocal;
+    },
+    getFiringDirection() {
+      const direction = new THREE.Vector3(0, 0, 1);
+      direction.applyQuaternion(mortarData.elevatingGroup.getWorldQuaternion(new THREE.Quaternion()));
+      return direction.normalize();
+    },
+    getPosition() {
+      return mortarData.group.position.clone();
+    },
+    setPosition(pos) {
+      mortarData.group.position.set(pos.x, pos.y, pos.z);
+    },
+    showLoadedBall(visible) {
+      mortarData.loadedBall.visible = visible;
+    },
+    triggerFire() {
+      firingAnim.active = true;
+      firingAnim.time = 0;
+      mortarData.muzzleFlash.material.opacity = 1;
+    }
+  };
+}

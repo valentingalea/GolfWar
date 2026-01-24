@@ -21,8 +21,9 @@ GolfWar/
     ├── index.html      # Main entry, orchestrates all modules, animation loop
     ├── config.js       # Centralized game configuration
     ├── game-state.js   # 6-stage state machine
-    ├── cannon.js       # Howitzer model, firing, projectile physics
-    ├── mortar.js       # M252 mortar model for "putting" phase
+    ├── cannon.js       # Howitzer model, controls, firing animation
+    ├── mortar.js       # M252 mortar model, controls, firing animation
+    ├── projectile.js   # Weapon-agnostic projectile physics system
     ├── Mortar.md       # Mortar technical reference documentation
     ├── drone.js        # Aerial camera view system
     ├── hands.js        # First-person hands rig
@@ -81,19 +82,43 @@ const cannonControls = createCannonControls(howitzerData);
 cannonControls.adjustRotation(delta);  // degrees
 cannonControls.adjustElevation(delta); // degrees, clamped 0-80
 
-// Projectile system (terrain enables heightmap collision)
-const projectileSystem = createProjectileSystem(scene, howitzerData, firingAnim, terrain);
+// Weapon adapter (for projectile system)
+const howitzerAdapter = createHowitzerAdapter(howitzerData, firingAnim);
+```
+
+### Projectile System (`projectile.js`)
+
+Weapon-agnostic projectile physics. Works with any weapon that provides an adapter.
+
+```javascript
+// Create with weapon adapter + optional terrain for heightmap collision
+const projectileSystem = createProjectileSystem(scene, weaponAdapter, terrain);
 projectileSystem.loadCannon();         // Load ball
 projectileSystem.fire();               // Returns true if fired
 projectileSystem.isBallAvailable();    // True if can pick up ball
 projectileSystem.isBallStabilized();   // True if ball stopped
 projectileSystem.getBallPosition();    // THREE.Vector3 or null
 projectileSystem.clearProjectiles();   // Remove all balls
-projectileSystem.setCannonPosition({ x, y, z }); // Move howitzer
+projectileSystem.setWeaponPosition({ x, y, z }); // Move weapon
+projectileSystem.getWeaponPosition();  // THREE.Vector3
 projectileSystem.onBallStabilized(callback);     // Register callback
 ```
 
-**Projectile Physics** (in cannon.js):
+**Weapon Adapter Interface** (duck-typed):
+```javascript
+{
+  getMuzzlePosition()     // → THREE.Vector3 (world coords)
+  getFiringDirection()    // → THREE.Vector3 (normalized, world coords)
+  getPosition()           // → THREE.Vector3 (weapon world position)
+  setPosition(pos)        // Move weapon to {x, y, z}
+  showLoadedBall(visible) // Show/hide loaded ball mesh
+  triggerFire()           // Start firing animation + muzzle flash
+}
+```
+
+Adapters: `createHowitzerAdapter()` in cannon.js, `createMortarAdapter()` in mortar.js.
+
+**Projectile Physics** (in projectile.js):
 - Gravity: 9.81 m/s²
 - Base restitution: 0.65 (bounciness)
 - Friction: 0.35 (tangent velocity loss on bounce)
@@ -108,7 +133,6 @@ projectileSystem.onBallStabilized(callback);     // Register callback
 - Rolling follows terrain slope (gravity projects onto surface)
 - Ball stays on terrain surface during rolling
 - Slow roll detection: force-stops after 2s of slow movement on shallow slopes
-- Pass terrain to: `createProjectileSystem(scene, howitzer, firingAnim, terrain)`
 
 ### Mortar System (`mortar.js`)
 
@@ -127,11 +151,8 @@ mortarControls.adjustElevation(delta);  // 45-85° (high-angle weapon)
 const mortarFiringAnim = createMortarFiringAnimation();
 updateMortarFiringAnimation(mortarFiringAnim, mortarData, dt); // In loop
 
-// Position helpers
-setMortarPosition(mortarData, { x, y, z });
-getMortarPosition(mortarData);          // THREE.Vector3
-getMortarMuzzlePosition(mortarData);    // World coords for projectile spawn
-getMortarFiringDirection(mortarData);   // Normalized direction vector
+// Weapon adapter (for projectile system)
+const mortarAdapter = createMortarAdapter(mortarData, mortarFiringAnim);
 ```
 
 **Key Differences from Howitzer**:
@@ -421,8 +442,9 @@ The `trees.js` module provides procedural tree placement for heightmap-based ter
 | File | Lines | Notes |
 |------|-------|-------|
 | index.html | ~975 | Main orchestration, async init, event handling |
-| cannon.js | ~760 | Howitzer model + physics + animation |
-| mortar.js | ~465 | M252 mortar model + controls + firing animation |
+| mortar.js | ~490 | M252 mortar model + controls + adapter |
+| cannon.js | ~450 | Howitzer model + controls + adapter |
+| projectile.js | ~275 | Weapon-agnostic projectile physics |
 | mobile-controls.js | ~350 | Touch controls system |
 | trees.js | ~350 | Procedural tree placement |
 | terrain-heightmap.js | ~320 | Heightmap loading from binary |
@@ -447,7 +469,7 @@ The `trees.js` module provides procedural tree placement for heightmap-based ter
 5. Add debug section to HTML if needed
 
 ### Modify projectile physics
-1. Edit constants in `createProjectileSystem()` in `cannon.js` (~line 450)
+1. Edit `physics` constants in `createProjectileSystem()` in `projectile.js`
 2. Or expose in `config.js` under PROJECTILE
 
 ### Add new course holes
@@ -468,11 +490,11 @@ The `trees.js` module provides procedural tree placement for heightmap-based ter
 
 ## Last Updated
 
-January 2025 - M252 Mortar for putting phase:
-- `mortar.js`: New module with M252-style mortar model, controls, firing animation
-- `Mortar.md`: Technical reference documentation with specs and implementation details
-- `index.html`: Mortar instantiation for testing
-- See `Mortar.md` for detailed specifications
+January 2025 - Projectile system extraction:
+- `projectile.js`: Weapon-agnostic projectile physics (extracted from cannon.js)
+- `cannon.js`: Added `createHowitzerAdapter()`, removed projectile code
+- `mortar.js`: Added `createMortarAdapter()` for projectile system reuse
+- Weapon adapter pattern: both weapons provide same interface to projectile system
 
 Previous updates:
 - Position-aware cannon adjustment (wrench modes, partial panels)

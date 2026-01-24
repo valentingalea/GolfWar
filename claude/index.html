@@ -327,8 +327,9 @@
     // Import modules
     import { setupRenderer, createLighting } from './lighting.js';
     import { createSkybox, createSun, setupHourControl } from './sun.js';
-    import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createProjectileSystem } from './cannon.js';
-    import { createMortar, createMortarControls, createMortarFiringAnimation, updateMortarFiringAnimation } from './mortar.js';
+    import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createHowitzerAdapter } from './cannon.js';
+    import { createMortar, createMortarControls, createMortarFiringAnimation, updateMortarFiringAnimation, createMortarAdapter } from './mortar.js';
+    import { createProjectileSystem } from './projectile.js';
     import { createFlag, positionFlag } from './flag.js';
     import { createDroneSystem } from './drone.js';
     import { createFirstPersonHands } from './hands.js';
@@ -503,7 +504,8 @@
     const howitzerData = createHowitzer(scene, CONFIG.buildCannonConfig(gameSession.currentHole));
     const firingAnim = createFiringAnimation();
     const cannonControls = createCannonControls(howitzerData);
-    const projectileSystem = createProjectileSystem(scene, howitzerData, firingAnim, terrain);
+    const howitzerAdapter = createHowitzerAdapter(howitzerData, firingAnim);
+    const projectileSystem = createProjectileSystem(scene, howitzerAdapter, terrain);
 
     // ========== MORTAR (TEST) ==========
     // Placed at origin for testing - will be used for "putting" phase
@@ -654,7 +656,7 @@
         }
 
         // Check distance to cannon
-        const cannonPos = projectileSystem.getCannonPosition();
+        const cannonPos = projectileSystem.getWeaponPosition();
         const distance = camera.position.distanceTo(cannonPos);
 
         if (distance <= CANNON_LOAD_DISTANCE) {
@@ -675,7 +677,7 @@
         }
 
         // Get cannon position and player position
-        const cannonPos = projectileSystem.getCannonPosition();
+        const cannonPos = projectileSystem.getWeaponPosition();
         const playerPos = camera.position.clone();
         playerPos.y = 0; // Ignore height difference
         const cannonPosFlat = cannonPos.clone();
@@ -756,7 +758,7 @@
         // After fade completes, do the move
         setTimeout(() => {
           // Get current cannon position to calculate offset
-          const oldCannonPos = projectileSystem.getCannonPosition();
+          const oldCannonPos = projectileSystem.getWeaponPosition();
 
           // Calculate player offset from cannon
           const playerOffsetX = camera.position.x - oldCannonPos.x;
@@ -769,7 +771,7 @@
             y: 0,
             z: ballPos.z
           };
-          projectileSystem.setCannonPosition(newCannonPos);
+          projectileSystem.setWeaponPosition(newCannonPos);
 
           // Move player maintaining offset from cannon
           camera.position.set(
@@ -1004,7 +1006,7 @@
 
       // Continuous position check for adjust-cannon stage (update wrench indicators)
       if (gameState.getCurrentStage().id === 'adjust-cannon' && !gameUI.isVisible()) {
-        const cannonPos = projectileSystem.getCannonPosition();
+        const cannonPos = projectileSystem.getWeaponPosition();
         const playerPos = camera.position.clone();
         playerPos.y = 0;
         const cannonPosFlat = cannonPos.clone();
