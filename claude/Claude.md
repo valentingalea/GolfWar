@@ -43,7 +43,7 @@ GolfWar/
 
 ## Core Game Loop
 
-1. **Setup Projectile**: Configure ball velocity/mass, load into cannon
+1. **Setup Projectile**: Configure shot profile (Charge/Kick/Hang/Break), load into cannon
 2. **Adjust Cannon**: Set rotation and elevation angles
 3. **Fire Cannon**: Fire and watch the ball fly (auto-follow available)
 4. **Observe**: Use drone view to track ball trajectory
@@ -94,7 +94,7 @@ Weapon-agnostic projectile physics. Works with any weapon that provides an adapt
 // Create with weapon adapter + optional terrain for heightmap collision
 const projectileSystem = createProjectileSystem(scene, weaponAdapter, terrain);
 projectileSystem.loadCannon();         // Load ball
-projectileSystem.fire();               // Returns true if fired
+projectileSystem.fire(shotSelections);  // Returns true if fired
 projectileSystem.isBallAvailable();    // True if can pick up ball
 projectileSystem.isBallStabilized();   // True if ball stopped
 projectileSystem.getBallPosition();    // THREE.Vector3 or null
@@ -118,13 +118,22 @@ projectileSystem.onBallStabilized(callback);     // Register callback
 
 Adapters: `createHowitzerAdapter()` in cannon.js, `createMortarAdapter()` in mortar.js.
 
+**Shot Profile System** (ADSR-inspired):
+- `fire(shotSelections)` takes `{ charge, kick, hang, break }` strings
+- Charge: Light/Standard/Heavy — energy budget multiplier
+- Kick: Chip/Full/Crush — launch speed + vertical pitch bias
+- Hang: Punch/Carry/Loft — air drag coefficient (higher = drops faster)
+- Break: Stick/Roll/Bounce — restitution + friction + roll multiplier
+- Charge coupling: Heavy slightly increases restitution, Light decreases it
+- Config values in `SHOT_PROFILE` constant in config.js
+
 **Projectile Physics** (in projectile.js):
 - Gravity: 9.81 m/s²
-- Base restitution: 0.65 (bounciness)
-- Friction: 0.35 (tangent velocity loss on bounce)
-- Rolling friction: 2.5 m/s² deceleration
+- Per-shot restitution/friction from Break profile
+- Air drag: exponential `v *= exp(-airDragK * dt)` from Hang profile
+- Rolling friction: 2.5 m/s² base, modulated by Break rollMult
 - Slope friction: 0.4 (extra friction on steep terrain)
-- Slow roll timeout: 2 sec at <0.5 m/s forces stop (prevents infinite creep)
+- Slow roll timeout: 2 sec at <0.5 m/s forces stop
 - States: `flying` → `bouncing` → `rolling` → `stopped`
 
 **Terrain Collision**:
@@ -230,12 +239,12 @@ getWrenchMode(handObjects);               // Get current mode
 
 ```javascript
 const gameUI = createGameUI();
-gameUI.show('projectile');  // Velocity/mass panel
+gameUI.show('projectile');  // Shot profile panel
 gameUI.show('cannon');      // Rotation/elevation panel
 gameUI.hide();
 gameUI.onHide(callback);
 gameUI.updateCannonDisplay(rotation, elevation);
-gameUI.syncProjectileValues(velocityEl, massEl);  // Sync with hidden inputs
+gameUI.getShotSelections(); // Returns { charge, kick, hang, break } strings
 ```
 
 ### Terrain System (`terrain-renderer.js` + `terrain-heightmap.js`)
@@ -303,7 +312,8 @@ All tunable parameters are centralized here:
 - `CAMERA` - FOV (65), near/far, start position offset
 - `CONTROLS` - Look sensitivity, move speed (5 m/s)
 - `DRONE` - Flight speed (30 m/s), transition speed, start height (15m)
-- `PROJECTILE` - Default velocity (20), mass (10), physics constants
+- `PROJECTILE` - Physics constants (rolling friction, bounce thresholds)
+- `SHOT_PROFILE` - Shot profile tuning (baseSpeed, charge/kick/hang/break values)
 - `FIRING` - Animation durations, recoil distances
 - `FLAG` - Scale (4x), dimensions
 - `AUTO_FOLLOW` - Enabled (true), delay (1 sec)
@@ -426,8 +436,10 @@ triggerWrenchShake(handObjects);         // Animate shake on failed action
 - `debug-recoil`: Inner/Outer Recoil, Auto-follow, Delay (Fire Cannon stage)
 
 Hidden inputs synced with Game UI:
-- `#velocityInput`, `#massInput` - projectile params
 - `#rotationValue`, `#elevationValue` - cannon angles
+
+Debug display:
+- `#lastShotValue` - Shows last shot profile (e.g., "Standard | Full | Carry | Roll")
 
 ## Trees System
 
@@ -490,14 +502,14 @@ The `trees.js` module provides procedural tree placement for heightmap-based ter
 
 ## Last Updated
 
-January 2025 - Projectile system extraction:
-- `projectile.js`: Weapon-agnostic projectile physics (extracted from cannon.js)
-- `cannon.js`: Added `createHowitzerAdapter()`, removed projectile code
-- `mortar.js`: Added `createMortarAdapter()` for projectile system reuse
-- Weapon adapter pattern: both weapons provide same interface to projectile system
+January 2025 - Shot Profile system:
+- `config.js`: Added SHOT_PROFILE constants (charge, kick, hang, break tuning)
+- `game-ui.js`: Replaced velocity/mass inputs with 4 discrete 3-way selectors
+- `projectile.js`: fire() uses shot profile, per-shot air drag/restitution/friction
+- `index.html`: Removed old inputs, added "Last Shot" debug display
 
 Previous updates:
+- Projectile system extraction + weapon adapter pattern
+- Mortar weapon with recoil animation
 - Position-aware cannon adjustment (wrench modes, partial panels)
-- Terrain collision physics in `cannon.js`
-- Wireframe overlay and vertex coloring in `terrain-renderer.js`
-- Heightmap loading from JSON + binary in `terrain-heightmap.js`
+- Terrain collision physics, wireframe overlay, heightmap loading
