@@ -128,10 +128,11 @@ Adapters: `createHowitzerAdapter()` in cannon.js, `createMortarAdapter()` in mor
 - Config values in `SHOT_PROFILE` constant in config.js
 
 **Envelope Preview Graph** (in game-ui.js):
-- Canvas-based behaviour envelope showing shot character across phases
+- Canvas-based ADSR-style behaviour envelope
 - X-axis: Launch → Flight → Impact (3 phase bands)
 - Y-axis: AIR (top) to GROUND (bottom)
-- Smooth Catmull-Rom curve through 5 control points derived from Kick/Hang/Break
+- 7 control points forming: attack rise (Kick), decay slope (Hang), sharp release (Break)
+- Curve type configurable: `ENVELOPE_MAP.curveType` = `'linear'` (sharp) or `'catmull-rom'` (smooth)
 - Charge does NOT affect the envelope shape
 - Config values in `ENVELOPE_MAP` constant in config.js
 - UI-only: physics code does not read from the envelope
@@ -513,8 +514,9 @@ The `trees.js` module provides procedural tree placement for heightmap-based ter
 ## Last Updated
 
 January 2025 - Envelope Preview + Shot Profile:
-- `game-ui.js`: Added canvas-based behaviour envelope graph (Catmull-Rom curve)
-- `config.js`: Added ENVELOPE_MAP, SHOT_PROFILE constants, loadDistance reduced to 2m
+- `game-ui.js`: ADSR-style envelope graph (7-point, linear/catmull-rom configurable)
+- `config.js`: ENVELOPE_MAP (attack peak, decay drop, release endpoint, curveType),
+  SHOT_PROFILE constants, loadDistance reduced to 2m
 - `projectile.js`: fire() uses shot profile, per-shot air drag/restitution/friction
 - `index.html`: Removed old inputs, added "Last Shot" debug display
 
