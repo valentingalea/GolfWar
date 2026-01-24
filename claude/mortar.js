@@ -316,6 +316,7 @@ export function createMortar(scene, config = {}) {
     defaultElevation,
     // Base values for animation
     tubeBaseZ: tube.position.z,
+    traverseGroupBaseY: traverseGroup.position.y,
     elevationBase: elevatingGroup.rotation.x,
     traverseBase: traverseGroup.rotation.y
   };
@@ -390,9 +391,10 @@ export function createMortarFiringAnimation() {
   return {
     active: false,
     time: 0,
-    duration: 0.8,        // Shorter than howitzer
-    tubeRecoilDist: 0.08, // Tube drops into baseplate
-    baseShakeIntensity: 0.02
+    duration: 1.0,
+    recoilDist: 0.06,       // How far tube assembly drops into baseplate
+    kickAngle: 0.08,        // Backward kick in radians (~4.5 degrees)
+    baseShakeIntensity: 0.015
   };
 }
 
@@ -413,14 +415,20 @@ export function updateMortarFiringAnimation(firingAnim, mortarData, dt) {
       mortarData.muzzleFlash.material.opacity = 0;
     }
 
-    // Tube recoil (drops into baseplate then returns)
-    const recoilPhase = t * 10;
-    const tubeOffset = firingAnim.tubeRecoilDist * Math.exp(-recoilPhase) * Math.sin(recoilPhase * Math.PI);
-    mortarData.tube.position.z = mortarData.tubeBaseZ - Math.max(0, tubeOffset);
+    // Tube assembly recoil into baseplate (traverseGroup drops in Y)
+    const recoilSpeed = 12;
+    const recoilDecay = Math.exp(-t * 6);
+    const recoilDrop = firingAnim.recoilDist * recoilDecay * Math.sin(t * recoilSpeed);
+    mortarData.traverseGroup.position.y = mortarData.traverseGroupBaseY - Math.max(0, recoilDrop);
 
-    // Baseplate shake
-    const shakeDecay = Math.exp(-t * 8);
-    const shakeFreq = 30;
+    // Elevation kick (tube kicks backward momentarily)
+    const kickDecay = Math.exp(-t * 5);
+    const kickOffset = firingAnim.kickAngle * kickDecay * Math.sin(t * 8);
+    mortarData.elevatingGroup.rotation.x = mortarData.elevationBase - Math.max(0, kickOffset);
+
+    // Baseplate shake (ground vibration)
+    const shakeDecay = Math.exp(-t * 7);
+    const shakeFreq = 25;
     mortarData.baseplate.position.x = firingAnim.baseShakeIntensity * shakeDecay * Math.sin(t * shakeFreq);
     mortarData.baseplate.position.z = firingAnim.baseShakeIntensity * shakeDecay * Math.cos(t * shakeFreq * 1.3);
 
@@ -429,7 +437,8 @@ export function updateMortarFiringAnimation(firingAnim, mortarData, dt) {
     firingAnim.active = false;
     firingAnim.time = 0;
     mortarData.muzzleFlash.material.opacity = 0;
-    mortarData.tube.position.z = mortarData.tubeBaseZ;
+    mortarData.traverseGroup.position.y = mortarData.traverseGroupBaseY;
+    mortarData.elevatingGroup.rotation.x = mortarData.elevationBase;
     mortarData.baseplate.position.x = 0;
     mortarData.baseplate.position.z = 0;
   }
