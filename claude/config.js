@@ -129,12 +129,14 @@ export const SHOT_PROFILE = {
 };
 
 // ========== ENVELOPE PREVIEW MAP ==========
-// Normalized Y-axis values (-1..+1) for the behaviour envelope graph
-// Positive = AIR/CARRY bias, Negative = GROUND/ROLL bias
+// ADSR-style parameters for the behaviour envelope graph
 export const ENVELOPE_MAP = {
-  kick:  { chip: -0.35, full: 0.00, crush: +0.35 },
-  hang:  { punch: -0.45, carry: 0.00, loft: +0.45 },
-  break: { stick: -0.40, roll: 0.00, bounce: +0.40 }
+  // Kick → attack peak height (how high the rise goes)
+  kick:  { chip: 0.30, full: 0.55, crush: 0.85 },
+  // Hang → decay drop from peak (how much it drops during flight)
+  hang:  { punch: 0.35, carry: 0.15, loft: 0.04 },
+  // Break → release endpoint (where the sharp drop lands; lower = sharper)
+  break: { stick: -0.30, roll: -0.05, bounce: 0.15 }
 };
 
 // ========== FIRING ANIMATION SETTINGS ==========

@@ -76,16 +76,20 @@ export function createGameUI() {
   const envelopeCtx = envelopeCanvas.getContext('2d');
 
   function computeEnvelopePoints(kick, hang, brk) {
-    const yLaunch = ENVELOPE_MAP.kick[kick] || 0;
-    const yMid = ENVELOPE_MAP.hang[hang] || 0;
-    const yImpact = ENVELOPE_MAP.break[brk] || 0;
+    const peak = ENVELOPE_MAP.kick[kick] || 0.55;
+    const drop = ENVELOPE_MAP.hang[hang] || 0.15;
+    const end = ENVELOPE_MAP.break[brk] || -0.05;
+
+    const decayLevel = peak - drop;
 
     return [
-      { x: 0.0, y: yLaunch * 0.85 },
-      { x: 0.2, y: yLaunch },
-      { x: 0.5, y: yMid },
-      { x: 0.8, y: yImpact },
-      { x: 1.0, y: yImpact * 0.85 }
+      { x: 0.00, y: 0 },                    // baseline start
+      { x: 0.03, y: 0 },                    // hold at baseline (sharpens attack onset)
+      { x: 0.28, y: peak },                 // attack peak
+      { x: 0.55, y: decayLevel },           // post-decay (flight phase)
+      { x: 0.76, y: decayLevel * 0.92 },    // pre-release plateau
+      { x: 0.88, y: end },                  // release drop (sharp)
+      { x: 1.00, y: end * 0.5 }             // release tail
     ];
   }
 
@@ -166,9 +170,9 @@ export function createGameUI() {
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // Draw control point dots
+    // Draw control point dots (peak, decay, release)
     ctx.fillStyle = 'rgba(136, 204, 255, 0.8)';
-    for (let i = 1; i <= 3; i++) {
+    for (const i of [2, 3, 5]) {
       ctx.beginPath();
       ctx.arc(canvasPoints[i].x, canvasPoints[i].y, 3, 0, Math.PI * 2);
       ctx.fill();
