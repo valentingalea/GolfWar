@@ -327,7 +327,7 @@
     // Import modules
     import { setupRenderer, createLighting } from './lighting.js';
     import { createSkybox, createSun, setupHourControl } from './sun.js';
-    import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createHowitzerAdapter } from './cannon.js';
+    // import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createHowitzerAdapter } from './cannon.js';
     import { createMortar, createMortarControls, createMortarFiringAnimation, updateMortarFiringAnimation, createMortarAdapter } from './mortar.js';
     import { createProjectileSystem } from './projectile.js';
     import { createFlag, positionFlag } from './flag.js';
@@ -500,22 +500,14 @@
       terrain.setWireframeVisible(wireframeCheckbox.checked);
     });
 
-    // ========== HOWITZER ==========
-    const howitzerData = createHowitzer(scene, CONFIG.buildCannonConfig(gameSession.currentHole));
-    const firingAnim = createFiringAnimation();
-    const cannonControls = createCannonControls(howitzerData);
-    const howitzerAdapter = createHowitzerAdapter(howitzerData, firingAnim);
-    const projectileSystem = createProjectileSystem(scene, howitzerAdapter, terrain);
-
-    // ========== MORTAR (TEST) ==========
-    // Placed at origin for testing - will be used for "putting" phase
-    const mortarData = createMortar(scene, {
-      position: { x: 0, y: 0, z: 0 },
-      rotation: 0,
-      scale: 1.0
-    });
+    // ========== MORTAR (active weapon) ==========
+    const cannonConfig = CONFIG.buildCannonConfig(gameSession.currentHole);
+    const mortarData = createMortar(scene, cannonConfig);
     const mortarControls = createMortarControls(mortarData);
     const mortarFiringAnim = createMortarFiringAnimation();
+    const mortarAdapter = createMortarAdapter(mortarData, mortarFiringAnim);
+    const cannonControls = mortarControls; // Alias for existing control references
+    const projectileSystem = createProjectileSystem(scene, mortarAdapter, terrain);
 
     // ========== FLAG ==========
     const flag = createFlag(CONFIG.FLAG);
@@ -997,8 +989,7 @@
       // Update drone system
       droneSystem.update(dt, moveForward, moveRight, yaw);
 
-      // Update firing animations
-      updateFiringAnimation(firingAnim, howitzerData, dt);
+      // Update firing animation
       updateMortarFiringAnimation(mortarFiringAnim, mortarData, dt);
 
       // Update projectiles
