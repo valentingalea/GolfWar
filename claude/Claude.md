@@ -127,6 +127,15 @@ Adapters: `createHowitzerAdapter()` in cannon.js, `createMortarAdapter()` in mor
 - Charge coupling: Heavy slightly increases restitution, Light decreases it
 - Config values in `SHOT_PROFILE` constant in config.js
 
+**Envelope Preview Graph** (in game-ui.js):
+- Canvas-based behaviour envelope showing shot character across phases
+- X-axis: Launch → Flight → Impact (3 phase bands)
+- Y-axis: AIR (top) to GROUND (bottom)
+- Smooth Catmull-Rom curve through 5 control points derived from Kick/Hang/Break
+- Charge does NOT affect the envelope shape
+- Config values in `ENVELOPE_MAP` constant in config.js
+- UI-only: physics code does not read from the envelope
+
 **Projectile Physics** (in projectile.js):
 - Gravity: 9.81 m/s²
 - Per-shot restitution/friction from Break profile
@@ -308,12 +317,13 @@ terrain.isWireframeVisible();        // Check state
 All tunable parameters are centralized here:
 - `COURSE` - 9 holes with cannon/flag positions, par values
 - `WORLD` - Floor size, sky radius, axis helper
-- `CANNON` - Offset, rotation, scale, load distance (3.5m)
+- `CANNON` - Offset, rotation, scale, load distance (2m)
 - `CAMERA` - FOV (65), near/far, start position offset
 - `CONTROLS` - Look sensitivity, move speed (5 m/s)
 - `DRONE` - Flight speed (30 m/s), transition speed, start height (15m)
 - `PROJECTILE` - Physics constants (rolling friction, bounce thresholds)
 - `SHOT_PROFILE` - Shot profile tuning (baseSpeed, charge/kick/hang/break values)
+- `ENVELOPE_MAP` - Envelope preview Y-axis mappings for kick/hang/break
 - `FIRING` - Animation durations, recoil distances
 - `FLAG` - Scale (4x), dimensions
 - `AUTO_FOLLOW` - Enabled (true), delay (1 sec)
@@ -362,7 +372,7 @@ const gameSession = {
 
 ### Ball Loading Flow
 1. Player in `setup-projectile` stage holding sphere
-2. Walk close to cannon (within 3.5m)
+2. Walk close to cannon (within 2m)
 3. Press F → ball loads, disappears from hand
 4. Switch to `fire-cannon`, press F → fires
 5. Ball flies, bounces, rolls, stops
@@ -502,9 +512,9 @@ The `trees.js` module provides procedural tree placement for heightmap-based ter
 
 ## Last Updated
 
-January 2025 - Shot Profile system:
-- `config.js`: Added SHOT_PROFILE constants (charge, kick, hang, break tuning)
-- `game-ui.js`: Replaced velocity/mass inputs with 4 discrete 3-way selectors
+January 2025 - Envelope Preview + Shot Profile:
+- `game-ui.js`: Added canvas-based behaviour envelope graph (Catmull-Rom curve)
+- `config.js`: Added ENVELOPE_MAP, SHOT_PROFILE constants, loadDistance reduced to 2m
 - `projectile.js`: fire() uses shot profile, per-shot air drag/restitution/friction
 - `index.html`: Removed old inputs, added "Last Shot" debug display
 

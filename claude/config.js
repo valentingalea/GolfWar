@@ -45,7 +45,7 @@ export const CANNON = {
   offset: { x: 3, y: 0, z: 0 },
   rotation: Math.PI,      // Facing direction
   scale: 1.2,
-  loadDistance: 3.5,      // Max distance to load ball into cannon
+  loadDistance: 2,      // Max distance to load ball into cannon
   adjustDistance: 2.0     // Max distance to adjust cannon rotation/elevation
 };
 
