@@ -145,7 +145,7 @@ export function createGameUI() {
 
     const canvasPoints = points.map(toCanvas);
 
-    // Draw smooth curve using Catmull-Rom-like cubic bezier segments
+    // Draw envelope curve
     ctx.strokeStyle = '#8cf';
     ctx.lineWidth = 2.5;
     ctx.shadowColor = 'rgba(136, 204, 255, 0.6)';
@@ -153,19 +153,25 @@ export function createGameUI() {
     ctx.beginPath();
     ctx.moveTo(canvasPoints[0].x, canvasPoints[0].y);
 
-    const tension = 0.3;
-    for (let i = 0; i < canvasPoints.length - 1; i++) {
-      const p0 = canvasPoints[Math.max(0, i - 1)];
-      const p1 = canvasPoints[i];
-      const p2 = canvasPoints[i + 1];
-      const p3 = canvasPoints[Math.min(canvasPoints.length - 1, i + 2)];
+    if (ENVELOPE_MAP.curveType === 'linear') {
+      for (let i = 1; i < canvasPoints.length; i++) {
+        ctx.lineTo(canvasPoints[i].x, canvasPoints[i].y);
+      }
+    } else {
+      const tension = 0.3;
+      for (let i = 0; i < canvasPoints.length - 1; i++) {
+        const p0 = canvasPoints[Math.max(0, i - 1)];
+        const p1 = canvasPoints[i];
+        const p2 = canvasPoints[i + 1];
+        const p3 = canvasPoints[Math.min(canvasPoints.length - 1, i + 2)];
 
-      const cp1x = p1.x + (p2.x - p0.x) * tension;
-      const cp1y = p1.y + (p2.y - p0.y) * tension;
-      const cp2x = p2.x - (p3.x - p1.x) * tension;
-      const cp2y = p2.y - (p3.y - p1.y) * tension;
+        const cp1x = p1.x + (p2.x - p0.x) * tension;
+        const cp1y = p1.y + (p2.y - p0.y) * tension;
+        const cp2x = p2.x - (p3.x - p1.x) * tension;
+        const cp2y = p2.y - (p3.y - p1.y) * tension;
 
-      ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+      }
     }
     ctx.stroke();
     ctx.shadowBlur = 0;

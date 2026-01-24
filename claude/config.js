@@ -131,6 +131,7 @@ export const SHOT_PROFILE = {
 // ========== ENVELOPE PREVIEW MAP ==========
 // ADSR-style parameters for the behaviour envelope graph
 export const ENVELOPE_MAP = {
+  curveType: 'linear',    // 'catmull-rom' for smooth, 'linear' for sharp gradients
   // Kick → attack peak height (how high the rise goes)
   kick:  { chip: 0.30, full: 0.55, crush: 0.85 },
   // Hang → decay drop from peak (how much it drops during flight)
