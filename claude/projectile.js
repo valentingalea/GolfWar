@@ -47,7 +47,8 @@ function reflectVelocity(velocity, normal, restitution, friction) {
 
 // Projectile system with smoke trails and bounce physics
 // terrain parameter is optional - if provided, ball collides with heightmap
-export function createProjectileSystem(scene, weaponAdapter, terrain = null) {
+export function createProjectileSystem(scene, initialWeaponAdapter, terrain = null) {
+  let weaponAdapter = initialWeaponAdapter;
   const projectiles = [];
   const smokeParticles = [];
   const gravity = new THREE.Vector3(0, -9.81, 0);
@@ -364,6 +365,9 @@ export function createProjectileSystem(scene, weaponAdapter, terrain = null) {
     },
     setWeaponPosition(pos) {
       weaponAdapter.setPosition(pos);
+    },
+    setWeaponAdapter(adapter) {
+      weaponAdapter = adapter;
     }
   };
 }

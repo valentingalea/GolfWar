@@ -327,7 +327,7 @@
     // Import modules
     import { setupRenderer, createLighting } from './lighting.js';
     import { createSkybox, createSun, setupHourControl } from './sun.js';
-    // import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createHowitzerAdapter } from './cannon.js';
+    import { createHowitzer, createFiringAnimation, updateFiringAnimation, createCannonControls, createHowitzerAdapter } from './cannon.js';
     import { createMortar, createMortarControls, createMortarFiringAnimation, updateMortarFiringAnimation, createMortarAdapter } from './mortar.js';
     import { createProjectileSystem } from './projectile.js';
     import { createFlag, positionFlag } from './flag.js';
@@ -500,14 +500,46 @@
       terrain.setWireframeVisible(wireframeCheckbox.checked);
     });
 
-    // ========== MORTAR (active weapon) ==========
+    // ========== WEAPONS ==========
     const cannonConfig = CONFIG.buildCannonConfig(gameSession.currentHole);
+
+    // Howitzer (long range)
+    const howitzerData = createHowitzer(scene, cannonConfig);
+    const firingAnim = createFiringAnimation();
+    const howitzerControls = createCannonControls(howitzerData);
+    const howitzerAdapter = createHowitzerAdapter(howitzerData, firingAnim);
+
+    // Mortar (putting)
     const mortarData = createMortar(scene, cannonConfig);
-    const mortarControls = createMortarControls(mortarData);
     const mortarFiringAnim = createMortarFiringAnimation();
+    const mortarControlsObj = createMortarControls(mortarData);
     const mortarAdapter = createMortarAdapter(mortarData, mortarFiringAnim);
-    const cannonControls = mortarControls; // Alias for existing control references
-    const projectileSystem = createProjectileSystem(scene, mortarAdapter, terrain);
+
+    // Weapon switching state
+    let useHowitzer = true;
+    howitzerData.group.visible = true;
+    mortarData.group.visible = false;
+
+    // Active controls reference (swapped on weapon switch)
+    let cannonControls = howitzerControls;
+    const projectileSystem = createProjectileSystem(scene, howitzerAdapter, terrain);
+
+    function switchWeapon() {
+      useHowitzer = !useHowitzer;
+      if (useHowitzer) {
+        // Switch to howitzer
+        howitzerData.group.visible = true;
+        mortarData.group.visible = false;
+        cannonControls = howitzerControls;
+        projectileSystem.setWeaponAdapter(howitzerAdapter);
+      } else {
+        // Switch to mortar
+        howitzerData.group.visible = false;
+        mortarData.group.visible = true;
+        cannonControls = mortarControlsObj;
+        projectileSystem.setWeaponAdapter(mortarAdapter);
+      }
+    }
 
     // ========== FLAG ==========
     const flag = createFlag(CONFIG.FLAG);
@@ -757,13 +789,17 @@
           const playerOffsetY = camera.position.y - oldCannonPos.y;
           const playerOffsetZ = camera.position.z - oldCannonPos.z;
 
-          // Move cannon to ball position (keep Y at ground level)
+          // Move both weapons to ball position (keep Y at ground level)
           const newCannonPos = {
             x: ballPos.x,
             y: 0,
             z: ballPos.z
           };
-          projectileSystem.setWeaponPosition(newCannonPos);
+          howitzerData.group.position.set(newCannonPos.x, newCannonPos.y, newCannonPos.z);
+          mortarData.group.position.set(newCannonPos.x, newCannonPos.y, newCannonPos.z);
+
+          // Alternate weapon for next shot
+          switchWeapon();
 
           // Move player maintaining offset from cannon
           camera.position.set(
@@ -989,7 +1025,8 @@
       // Update drone system
       droneSystem.update(dt, moveForward, moveRight, yaw);
 
-      // Update firing animation
+      // Update firing animations
+      updateFiringAnimation(firingAnim, howitzerData, dt);
       updateMortarFiringAnimation(mortarFiringAnim, mortarData, dt);
 
       // Update projectiles
