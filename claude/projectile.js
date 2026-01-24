@@ -1,6 +1,7 @@
 // Projectile system - physics, smoke trails, ball management
 // Weapon-agnostic: works with any weapon that implements the adapter interface
 import * as THREE from 'three';
+import { SHOT_PROFILE, PROJECTILE } from './config.js';
 
 // Create smoke particle texture
 function createSmokeTexture() {
@@ -63,18 +64,7 @@ export function createProjectileSystem(scene, initialWeaponAdapter, terrain = nu
   // Cannon loaded state
   let isLoaded = false;
   let onBallStabilizedCallback = null;
-
-  // Physics constants
-  const physics = {
-    baseRestitution: 0.65,
-    friction: 0.35,
-    rollingFriction: 2.5,
-    minBounceVelocity: 0.5,
-    minRollVelocity: 0.1,
-    slopeFriction: 0.4,
-    slowRollSpeed: 0.5,
-    maxSlowRollTime: 2.0
-  };
+  let lastShotSelections = null;
 
   // Helper: get ground height at position (uses terrain if available)
   function getGroundHeight(x, z) {
@@ -103,8 +93,30 @@ export function createProjectileSystem(scene, initialWeaponAdapter, terrain = nu
     drift: 0.5
   };
 
-  const velocityInput = document.getElementById('velocityInput');
-  const massInput = document.getElementById('massInput');
+  // Build shot profile from UI selections
+  function getShotProfile(selections) {
+    const chargeMult = SHOT_PROFILE.charge[selections.charge] || 1.0;
+    const kick = SHOT_PROFILE.kick[selections.kick] || SHOT_PROFILE.kick.full;
+    const airDragK = SHOT_PROFILE.hang[selections.hang] || SHOT_PROFILE.hang.carry;
+    const breakProfile = SHOT_PROFILE.break[selections.break] || SHOT_PROFILE.break.roll;
+
+    const speed = SHOT_PROFILE.baseSpeed * chargeMult * kick.speedMult;
+
+    // Charge coupling: modulate restitution slightly
+    let restitution = breakProfile.restitution;
+    if (selections.charge === 'heavy') restitution += SHOT_PROFILE.chargeCoupling.heavy;
+    if (selections.charge === 'light') restitution += SHOT_PROFILE.chargeCoupling.light;
+
+    return {
+      speed,
+      kickPitch: kick.pitch,
+      airDragK,
+      restitution: Math.max(0, Math.min(restitution, 0.95)),
+      friction: breakProfile.friction,
+      rollMult: breakProfile.rollMult,
+      mass: SHOT_PROFILE.fixedMass
+    };
+  }
 
   function createSmokeParticle(position) {
     const smokeMaterial = new THREE.SpriteMaterial({
@@ -129,13 +141,15 @@ export function createProjectileSystem(scene, initialWeaponAdapter, terrain = nu
     };
   }
 
-  function fire() {
+  function fire(shotSelections) {
     if (!isLoaded) {
       return false;
     }
 
-    const velocity = parseFloat(velocityInput.value) || 20;
-    const mass = parseFloat(massInput.value) || 10;
+    // Build shot profile from selections
+    const selections = shotSelections || { charge: 'standard', kick: 'full', hang: 'carry', break: 'roll' };
+    const profile = getShotProfile(selections);
+    lastShotSelections = selections;
 
     const projectile = new THREE.Mesh(geometry, material);
     projectile.castShadow = true;
@@ -145,12 +159,24 @@ export function createProjectileSystem(scene, initialWeaponAdapter, terrain = nu
     projectile.position.copy(muzzleWorld);
     scene.add(projectile);
 
+    // Apply kick pitch bias to direction
     const direction = weaponAdapter.getFiringDirection();
+    if (profile.kickPitch !== 0) {
+      const up = new THREE.Vector3(0, 1, 0);
+      direction.addScaledVector(up, profile.kickPitch);
+      direction.normalize();
+    }
 
     projectiles.push({
       mesh: projectile,
-      velocity: direction.multiplyScalar(velocity),
-      mass: mass,
+      velocity: direction.multiplyScalar(profile.speed),
+      mass: profile.mass,
+      shot: {
+        airDragK: profile.airDragK,
+        restitution: profile.restitution,
+        friction: profile.friction,
+        rollMult: profile.rollMult
+      },
       smokeTimer: 0,
       state: 'flying',
       bounceCount: 0,
@@ -179,6 +205,12 @@ export function createProjectileSystem(scene, initialWeaponAdapter, terrain = nu
       if (proj.state === 'flying' || proj.state === 'bouncing') {
         // Apply gravity
         proj.velocity.addScaledVector(gravity, dt);
+
+        // Apply air drag (Hang profile)
+        if (proj.shot && proj.shot.airDragK > 0) {
+          proj.velocity.multiplyScalar(Math.exp(-proj.shot.airDragK * dt));
+        }
+
         proj.mesh.position.addScaledVector(proj.velocity, dt);
 
         // Spawn smoke particles (only while in the air and moving fast)
@@ -201,7 +233,7 @@ export function createProjectileSystem(scene, initialWeaponAdapter, terrain = nu
           const normal = getGroundNormal(proj.mesh.position.x, proj.mesh.position.z);
           const impactSpeed = Math.abs(proj.velocity.dot(normal));
 
-          if (impactSpeed < physics.minBounceVelocity) {
+          if (impactSpeed < PROJECTILE.minBounceVelocity) {
             proj.state = 'rolling';
             const vDotN = proj.velocity.dot(normal);
             if (vDotN < 0) {
@@ -211,12 +243,14 @@ export function createProjectileSystem(scene, initialWeaponAdapter, terrain = nu
             proj.state = 'bouncing';
             proj.bounceCount++;
 
-            const massRatio = Math.min(proj.mass / 20, 1.5);
+            // Use per-shot restitution/friction (Break profile)
+            const shotRestitution = proj.shot ? proj.shot.restitution : 0.30;
+            const shotFriction = proj.shot ? proj.shot.friction : 0.35;
             const speedFactor = Math.max(0.8, 1 - impactSpeed * 0.005);
-            const restitution = physics.baseRestitution * massRatio * speedFactor;
+            const restitution = Math.min(shotRestitution * speedFactor, 0.95);
 
             proj.velocity.copy(
-              reflectVelocity(proj.velocity, normal, Math.min(restitution, 0.95), physics.friction)
+              reflectVelocity(proj.velocity, normal, restitution, shotFriction)
             );
           }
         }
@@ -241,19 +275,19 @@ export function createProjectileSystem(scene, initialWeaponAdapter, terrain = nu
 
         const speed = proj.velocity.length();
         const slopeSteepness = 1 - normal.y;
-        const extraFriction = slopeSteepness * physics.slopeFriction;
+        const extraFriction = slopeSteepness * PROJECTILE.slopeFriction;
 
         // Track slow rolling
-        if (speed < physics.slowRollSpeed) {
+        if (speed < PROJECTILE.slowRollSpeed) {
           proj.slowRollTime += dt;
         } else {
           proj.slowRollTime = 0;
         }
 
-        const forceStop = proj.slowRollTime >= physics.maxSlowRollTime;
+        const forceStop = proj.slowRollTime >= PROJECTILE.maxSlowRollTime;
 
-        if (speed < physics.minRollVelocity || forceStop) {
-          if (forceStop || slopeAccel.length() < physics.minRollVelocity * 2) {
+        if (speed < PROJECTILE.minRollVelocity || forceStop) {
+          if (forceStop || slopeAccel.length() < PROJECTILE.minRollVelocity * 2) {
             proj.state = 'stopped';
             proj.velocity.set(0, 0, 0);
 
@@ -263,8 +297,9 @@ export function createProjectileSystem(scene, initialWeaponAdapter, terrain = nu
             }
           }
         } else {
-          // Apply rolling friction
-          const totalFriction = (physics.rollingFriction + extraFriction) * dt;
+          // Apply rolling friction (modulated by Break profile rollMult)
+          const rollMult = proj.shot ? proj.shot.rollMult : 1.0;
+          const totalFriction = (PROJECTILE.rollingFriction * rollMult + extraFriction) * dt;
           const newSpeed = Math.max(0, speed - totalFriction);
           const scale = speed > 0 ? newSpeed / speed : 0;
           proj.velocity.multiplyScalar(scale);
@@ -335,6 +370,9 @@ export function createProjectileSystem(scene, initialWeaponAdapter, terrain = nu
     },
     onBallStabilized(callback) {
       onBallStabilizedCallback = callback;
+    },
+    getLastShotSelections() {
+      return lastShotSelections;
     },
     getWeaponPosition() {
       return weaponAdapter.getPosition();

@@ -81,22 +81,51 @@ export const DRONE = {
 
 // ========== PROJECTILE SETTINGS ==========
 export const PROJECTILE = {
-  // Default launch parameters
-  defaultVelocity: 20,    // m/s
-  minVelocity: 10,
-  maxVelocity: 200,
-  defaultMass: 10,        // kg
-  minMass: 1,
-  maxMass: 100,
   radius: 0.15,           // Ball radius in meters
-
-  // Physics
   gravity: 9.81,
-  baseRestitution: 0.75,  // Bounciness (0-1)
-  friction: 0.3,          // Horizontal velocity loss on bounce
-  rollingFriction: 2.0,   // Deceleration when rolling (m/s²)
+  rollingFriction: 2.5,   // Base deceleration when rolling (m/s²)
+  slopeFriction: 0.4,     // Extra friction on steep terrain
   minBounceVelocity: 0.5, // Below this, stop bouncing
-  minRollVelocity: 0.1    // Below this, stop completely
+  minRollVelocity: 0.1,   // Below this, stop completely
+  slowRollSpeed: 0.5,     // Speed considered "slow rolling"
+  maxSlowRollTime: 2.0    // Max seconds of slow rolling before force-stop
+};
+
+// ========== SHOT PROFILE ==========
+export const SHOT_PROFILE = {
+  baseSpeed: 20,          // Base launch speed (m/s)
+  fixedMass: 10,          // Standardized ball mass (kg)
+
+  // Charge: energy budget multiplier
+  charge: {
+    light:    0.85,
+    standard: 1.00,
+    heavy:    1.20
+  },
+
+  // Kick: launch character (speed multiplier + vertical pitch bias)
+  kick: {
+    chip:  { speedMult: 0.92, pitch: -0.04 },
+    full:  { speedMult: 1.00, pitch: 0 },
+    crush: { speedMult: 1.08, pitch: 0.05 }
+  },
+
+  // Hang: air drag coefficient (higher = drops faster)
+  hang: {
+    punch: 0.12,
+    carry: 0.08,
+    loft:  0.05
+  },
+
+  // Break: ground response (restitution + friction)
+  break: {
+    stick:  { restitution: 0.12, friction: 0.55, rollMult: 1.5 },
+    roll:   { restitution: 0.30, friction: 0.35, rollMult: 1.0 },
+    bounce: { restitution: 0.60, friction: 0.18, rollMult: 0.6 }
+  },
+
+  // Charge coupling: slight restitution modifier
+  chargeCoupling: { heavy: 0.05, light: -0.03 }
 };
 
 // ========== FIRING ANIMATION SETTINGS ==========

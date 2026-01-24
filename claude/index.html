@@ -245,6 +245,10 @@
         <span class="hud-label">Ball Distance</span>
         <span id="ballDistValue" class="hud-value hud-readonly" style="min-width: 90px;">--</span>
       </div>
+      <div class="hud-row">
+        <span class="hud-label">Last Shot</span>
+        <span id="lastShotValue" class="hud-value hud-readonly" style="min-width: 150px; font-size: 10px;">--</span>
+      </div>
     </div>
 
     <!-- Terrain and Lighting controls -->
@@ -315,9 +319,7 @@
       </div>
     </div>
 
-    <!-- Hidden inputs used by cannon.js (values synced via Game UI) -->
-    <input id="velocityInput" type="hidden" value="20" />
-    <input id="massInput" type="hidden" value="10" />
+    <!-- Hidden inputs used by cannon controls -->
     <span id="rotationValue" style="display:none;">0°</span>
     <span id="elevationValue" style="display:none;">40°</span>
   </div>
@@ -741,13 +743,20 @@
       fireCannon: () => {
         // Always animate button press
         triggerButtonPress(handObjects);
-        // Only actually fire if loaded (fire returns false if not loaded)
-        const fired = projectileSystem.fire();
+        // Fire with current shot profile selections
+        const shotSelections = gameUI.getShotSelections();
+        const fired = projectileSystem.fire(shotSelections);
 
         // Increment shot count and update UI on successful fire
         if (fired) {
           gameSession.shotCount++;
           updateScoringUI();
+          // Update debug "Last Shot" display
+          const lastShotEl = document.getElementById('lastShotValue');
+          if (lastShotEl) {
+            const s = shotSelections;
+            lastShotEl.textContent = `${s.charge} | ${s.kick} | ${s.hang} | ${s.break}`;
+          }
         }
 
         // Auto-follow: switch to drone view after successful fire (with delay)
@@ -857,12 +866,6 @@
       () => cannonControls.adjustElevation(5),
       () => cannonControls.adjustElevation(-5),
       () => gameUI.updateCannonDisplay(cannonControls.getRotation(), cannonControls.getElevation())
-    );
-
-    // Sync projectile values
-    gameUI.syncProjectileValues(
-      document.getElementById('velocityInput'),
-      document.getElementById('massInput')
     );
 
     // ========== MOBILE CONTROLS CALLBACKS ==========

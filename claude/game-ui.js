@@ -23,25 +23,56 @@ export function createGameUI() {
   `;
   document.body.appendChild(overlay);
 
-  // Projectile controls panel
+  // Shot Profile panel
   const projectilePanel = document.createElement('div');
   projectilePanel.id = 'game-ui-projectile';
+
+  function createShotRow(id, label, options, defaultValue) {
+    const optionsHtml = options.map(opt =>
+      `<button class="shot-btn${opt.value === defaultValue ? ' active' : ''}" data-value="${opt.value}">${opt.label}</button>`
+    ).join('');
+    return `<div class="game-ui-row shot-row">
+      <span class="game-ui-label">${label}</span>
+      <div class="shot-group" id="${id}">${optionsHtml}</div>
+    </div>`;
+  }
+
   projectilePanel.innerHTML = `
-    <h3 style="margin: 0 0 16px 0; text-align: center; color: #8cf;">Projectile Setup</h3>
-    <div class="game-ui-row">
-      <span class="game-ui-label">Velocity</span>
-      <input id="gameVelocityInput" class="game-ui-input" type="number" value="20" min="10" max="200" step="5" />
-      <span class="game-ui-unit">m/s</span>
-    </div>
-    <div class="game-ui-row">
-      <span class="game-ui-label">Mass</span>
-      <input id="gameMassInput" class="game-ui-input" type="number" value="10" min="1" max="100" step="1" />
-      <span class="game-ui-unit">kg</span>
-    </div>
+    <h3 style="margin: 0 0 16px 0; text-align: center; color: #8cf;">Shot Profile</h3>
+    ${createShotRow('shotCharge', 'Charge', [
+      { label: 'Light', value: 'light' },
+      { label: 'Standard', value: 'standard' },
+      { label: 'Heavy', value: 'heavy' }
+    ], 'standard')}
+    ${createShotRow('shotKick', 'Kick', [
+      { label: 'Chip', value: 'chip' },
+      { label: 'Full', value: 'full' },
+      { label: 'Crush', value: 'crush' }
+    ], 'full')}
+    ${createShotRow('shotHang', 'Hang', [
+      { label: 'Punch', value: 'punch' },
+      { label: 'Carry', value: 'carry' },
+      { label: 'Loft', value: 'loft' }
+    ], 'carry')}
+    ${createShotRow('shotBreak', 'Break', [
+      { label: 'Stick', value: 'stick' },
+      { label: 'Roll', value: 'roll' },
+      { label: 'Bounce', value: 'bounce' }
+    ], 'roll')}
     <div class="game-ui-hint">Press F to close</div>
   `;
   projectilePanel.style.display = 'none';
   overlay.appendChild(projectilePanel);
+
+  // Wire up shot group button clicks
+  projectilePanel.querySelectorAll('.shot-group').forEach(group => {
+    group.addEventListener('click', (e) => {
+      const btn = e.target.closest('.shot-btn');
+      if (!btn) return;
+      group.querySelectorAll('.shot-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
 
   // Cannon controls panel
   const cannonPanel = document.createElement('div');
@@ -127,6 +158,31 @@ export function createGameUI() {
       font-size: 11px;
       color: rgba(255, 255, 255, 0.4);
     }
+    .shot-row {
+      margin-bottom: 10px;
+    }
+    .shot-group {
+      display: flex;
+      gap: 2px;
+    }
+    .shot-btn {
+      padding: 5px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.6);
+      font-family: monospace;
+      font-size: 12px;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+    .shot-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+    .shot-btn.active {
+      background: rgba(100, 180, 255, 0.3);
+      border-color: rgba(100, 180, 255, 0.7);
+      color: #fff;
+    }
   `;
   document.head.appendChild(style);
 
@@ -193,30 +249,18 @@ export function createGameUI() {
     onHide(callback) {
       onHideCallback = callback;
     },
-    // Sync projectile values with debug UI
-    syncProjectileValues(debugVelocityEl, debugMassEl) {
-      const gameVelocity = document.getElementById('gameVelocityInput');
-      const gameMass = document.getElementById('gameMassInput');
-
-      // Sync from debug to game UI on show
-      gameVelocity.value = debugVelocityEl.value;
-      gameMass.value = debugMassEl.value;
-
-      // Sync game UI changes to debug UI
-      gameVelocity.addEventListener('input', () => {
-        debugVelocityEl.value = gameVelocity.value;
-      });
-      gameMass.addEventListener('input', () => {
-        debugMassEl.value = gameMass.value;
-      });
-
-      // Sync debug UI changes to game UI
-      debugVelocityEl.addEventListener('input', () => {
-        gameVelocity.value = debugVelocityEl.value;
-      });
-      debugMassEl.addEventListener('input', () => {
-        gameMass.value = debugMassEl.value;
-      });
+    // Get current shot profile selections
+    getShotSelections() {
+      function getActive(groupId) {
+        const active = document.querySelector(`#${groupId} .shot-btn.active`);
+        return active ? active.dataset.value : null;
+      }
+      return {
+        charge: getActive('shotCharge') || 'standard',
+        kick: getActive('shotKick') || 'full',
+        hang: getActive('shotHang') || 'carry',
+        break: getActive('shotBreak') || 'roll'
+      };
     },
     // Setup cannon controls with callbacks
     setupCannonControls(onRotLeft, onRotRight, onElevUp, onElevDown, updateDisplay) {
