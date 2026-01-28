@@ -140,6 +140,15 @@ export const ENVELOPE_MAP = {
   break: { stick: -0.30, roll: -0.05, bounce: 0.15 }
 };
 
+// ========== DIAL SETTINGS ==========
+export const DIAL = {
+  ratio: 3.0,           // Dial degrees to cannon degrees (3:1)
+  friction: 0.92,       // Velocity decay per frame (0.92 = moderate spin)
+  minVelocity: 0.5,     // Stop threshold (deg/sec)
+  maxVelocity: 720,     // Max spin speed (deg/sec)
+  size: 120             // Dial diameter in pixels
+};
+
 // ========== FIRING ANIMATION SETTINGS ==========
 export const FIRING = {
   duration: 1.2,

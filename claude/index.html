@@ -319,6 +319,20 @@
       </div>
     </div>
 
+    <!-- Stage-specific: Dial settings (Adjust Cannon stage) -->
+    <div id="debug-dial" class="debug-section" style="display: none;">
+      <div class="hud-divider"></div>
+      <div class="hud-row">
+        <span class="hud-label">Dial Ratio</span>
+        <input id="dialRatioInput" class="hud-input" type="number" value="3.0" min="1" max="10" step="0.5" />
+        <span class="hud-unit">:1</span>
+      </div>
+      <div class="hud-row">
+        <span class="hud-label">Inertia</span>
+        <input id="dialFrictionInput" class="hud-input" type="number" value="0.92" min="0.8" max="0.99" step="0.01" />
+      </div>
+    </div>
+
     <!-- Hidden inputs used by cannon controls -->
     <span id="rotationValue" style="display:none;">0°</span>
     <span id="elevationValue" style="display:none;">40°</span>
@@ -579,13 +593,26 @@
       droneSystem.setTransitionSpeed(parseFloat(droneTransitionInput.value) || 15);
     });
 
+    // ========== DIAL CONTROLS ==========
+    const dialRatioInput = document.getElementById('dialRatioInput');
+    const dialFrictionInput = document.getElementById('dialFrictionInput');
+
+    dialRatioInput?.addEventListener('change', () => {
+      gameUI.setDialRatio(parseFloat(dialRatioInput.value) || 3.0);
+    });
+
+    dialFrictionInput?.addEventListener('change', () => {
+      gameUI.setDialFriction(parseFloat(dialFrictionInput.value) || 0.92);
+    });
+
     // ========== MOBILE CONTROLS ==========
     const mobileControls = createMobileControls();
 
     // ========== DEBUG UI SECTIONS ==========
     const debugSections = {
       drone: document.getElementById('debug-drone'),
-      recoil: document.getElementById('debug-recoil')
+      recoil: document.getElementById('debug-recoil'),
+      dial: document.getElementById('debug-dial')
     };
     const stageValueEl = document.getElementById('stageValue');
 
@@ -859,12 +886,10 @@
       setWrenchMode(handObjects, 'none');
     });
 
-    // Sync Game UI with cannon controls
-    gameUI.setupCannonControls(
-      () => cannonControls.adjustRotation(-5),
-      () => cannonControls.adjustRotation(5),
-      () => cannonControls.adjustElevation(5),
-      () => cannonControls.adjustElevation(-5),
+    // Sync Game UI dial with cannon controls
+    gameUI.setupDialControl(
+      (delta) => cannonControls.adjustRotation(delta),
+      (delta) => cannonControls.adjustElevation(delta),
       () => gameUI.updateCannonDisplay(cannonControls.getRotation(), cannonControls.getElevation())
     );
 
@@ -1067,6 +1092,9 @@
 
       // Update hand object animations
       updateHandObjectAnimations(handObjects, gameState.getCurrentStage().id, dt);
+
+      // Update dial inertia
+      gameUI.updateDial(dt);
 
       // Update camera debug display
       camPosValue.textContent = `${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}`;

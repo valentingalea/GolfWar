@@ -28,7 +28,7 @@ const STAGES = [
     index: 2,
     name: 'Adjust Cannon',
     handObject: 'wrench',
-    debugSection: null,
+    debugSection: 'dial',
     gameUI: 'cannon',
     canCycle: true,
     action: 'toggleGameUI'

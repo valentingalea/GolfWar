@@ -250,12 +250,25 @@ getWrenchMode(handObjects);               // Get current mode
 ```javascript
 const gameUI = createGameUI();
 gameUI.show('projectile');  // Shot profile panel
-gameUI.show('cannon');      // Rotation/elevation panel
+gameUI.show('cannon');      // Rotation/elevation dial panel
 gameUI.hide();
 gameUI.onHide(callback);
 gameUI.updateCannonDisplay(rotation, elevation);
 gameUI.getShotSelections(); // Returns { charge, kick, hang, break } strings
+
+// Dial control for cannon adjustment
+gameUI.setupDialControl(onRotation, onElevation, updateDisplay);
+gameUI.updateDial(dt);       // Call in animation loop for inertia
+gameUI.setDialRatio(ratio);  // Runtime tuning
+gameUI.setDialFriction(friction);
 ```
+
+**Dial Control**: The cannon adjustment panel uses a spinning dial instead of buttons:
+- Drag to rotate dial, which adjusts cannon rotation or elevation
+- Release with momentum for inertia effect (dial keeps spinning)
+- Ratio: dial degrees to cannon degrees (default 3:1, configurable via `DIAL.ratio`)
+- Friction: velocity decay per frame (default 0.92, configurable via `DIAL.friction`)
+- Mode determined by player position: breech side = rotation, sides/front = elevation
 
 ### Terrain System (`terrain-renderer.js` + `terrain-heightmap.js`)
 
@@ -325,6 +338,7 @@ All tunable parameters are centralized here:
 - `PROJECTILE` - Physics constants (rolling friction, bounce thresholds)
 - `SHOT_PROFILE` - Shot profile tuning (baseSpeed, charge/kick/hang/break values)
 - `ENVELOPE_MAP` - Envelope preview Y-axis mappings for kick/hang/break
+- `DIAL` - Spinning dial control: ratio (3:1), friction (0.92), velocity limits
 - `FIRING` - Animation durations, recoil distances
 - `FLAG` - Scale (4x), dimensions
 - `AUTO_FOLLOW` - Enabled (true), delay (1 sec)
@@ -444,6 +458,7 @@ triggerWrenchShake(handObjects);         // Animate shake on failed action
 
 **Per-stage sections**:
 - `debug-drone`: Drone Height, Speed, Transition speed (Idle stage)
+- `debug-dial`: Dial Ratio, Inertia/Friction (Adjust Cannon stage)
 - `debug-recoil`: Inner/Outer Recoil, Auto-follow, Delay (Fire Cannon stage)
 
 Hidden inputs synced with Game UI:
@@ -513,14 +528,15 @@ The `trees.js` module provides procedural tree placement for heightmap-based ter
 
 ## Last Updated
 
-January 2025 - Envelope Preview + Shot Profile:
-- `game-ui.js`: ADSR-style envelope graph (7-point, linear/catmull-rom configurable)
-- `config.js`: ENVELOPE_MAP (attack peak, decay drop, release endpoint, curveType),
-  SHOT_PROFILE constants, loadDistance reduced to 2m
-- `projectile.js`: fire() uses shot profile, per-shot air drag/restitution/friction
-- `index.html`: Removed old inputs, added "Last Shot" debug display
+January 2025 - Spinning Dial Aim Control:
+- `game-ui.js`: Replaced button-based cannon controls with draggable spinning dial
+- `config.js`: Added DIAL settings (ratio 3:1, friction 0.92, velocity limits)
+- `game-state.js`: adjust-cannon stage now uses 'dial' debugSection
+- `index.html`: Added debug-dial section with Dial Ratio and Inertia inputs
 
 Previous updates:
+- Envelope Preview + Shot Profile (ADSR-style graph, shot profiles)
+- Projectile system extraction + weapon adapter pattern
 - Projectile system extraction + weapon adapter pattern
 - Mortar weapon with recoil animation
 - Position-aware cannon adjustment (wrench modes, partial panels)

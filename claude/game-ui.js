@@ -1,5 +1,5 @@
 // Game UI - center screen overlays for stage-specific controls
-import { ENVELOPE_MAP } from './config.js';
+import { ENVELOPE_MAP, DIAL } from './config.js';
 
 // Create Game UI system
 export function createGameUI() {
@@ -222,24 +222,17 @@ export function createGameUI() {
     });
   });
 
-  // Cannon controls panel
+  // Cannon controls panel with dial
   const cannonPanel = document.createElement('div');
   cannonPanel.id = 'game-ui-cannon';
   cannonPanel.innerHTML = `
     <h3 id="cannonPanelTitle" style="margin: 0 0 16px 0; text-align: center; color: #fc8;">Cannon Adjust</h3>
-    <div id="cannonRotationRow" class="game-ui-row">
-      <span class="game-ui-label">Rotation</span>
-      <span id="gameRotationValue" class="game-ui-value">0°</span>
-      <button id="gameRotLeft" class="game-ui-btn">&lt;</button>
-      <button id="gameRotRight" class="game-ui-btn">&gt;</button>
+    <div id="dialContainer" class="dial-container">
+      <canvas id="dialCanvas" width="${DIAL.size}" height="${DIAL.size}"></canvas>
+      <div id="dialValueDisplay" class="dial-value">0°</div>
+      <div id="dialModeLabel" class="dial-mode">Rotation</div>
     </div>
-    <div id="cannonElevationRow" class="game-ui-row">
-      <span class="game-ui-label">Elevation</span>
-      <span id="gameElevationValue" class="game-ui-value">40°</span>
-      <button id="gameElevDown" class="game-ui-btn">-</button>
-      <button id="gameElevUp" class="game-ui-btn">+</button>
-    </div>
-    <div class="game-ui-hint">Press F to close</div>
+    <div class="game-ui-hint">Spin dial • Press F to close</div>
   `;
   cannonPanel.style.display = 'none';
   overlay.appendChild(cannonPanel);
@@ -331,8 +324,226 @@ export function createGameUI() {
       border-color: rgba(100, 180, 255, 0.7);
       color: #fff;
     }
+    .dial-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      margin: 10px 0;
+    }
+    #dialCanvas {
+      cursor: grab;
+      touch-action: none;
+    }
+    #dialCanvas.dragging {
+      cursor: grabbing;
+    }
+    .dial-value {
+      font-size: 20px;
+      font-weight: bold;
+      color: #fc8;
+    }
+    .dial-mode {
+      font-size: 11px;
+      color: rgba(255,255,255,0.5);
+    }
   `;
   document.head.appendChild(style);
+
+  // DialControl class for rotating dial input
+  class DialControl {
+    constructor(canvas, config) {
+      this.canvas = canvas;
+      this.ctx = canvas.getContext('2d');
+      this.size = config.size || 120;
+      this.ratio = config.ratio || 3.0;
+      this.friction = config.friction || 0.92;
+      this.minVelocity = config.minVelocity || 0.5;
+      this.maxVelocity = config.maxVelocity || 720;
+
+      // State
+      this.dialAngle = 0;
+      this.velocity = 0;
+      this.isDragging = false;
+      this.lastAngle = 0;
+      this.lastTime = 0;
+      this.velocitySamples = [];
+
+      // Callbacks
+      this.onAdjust = null;
+
+      this.setupEvents();
+      this.render();
+    }
+
+    setupEvents() {
+      this.canvas.addEventListener('mousedown', this.onDragStart.bind(this));
+      window.addEventListener('mousemove', this.onDragMove.bind(this));
+      window.addEventListener('mouseup', this.onDragEnd.bind(this));
+
+      this.canvas.addEventListener('touchstart', this.onDragStart.bind(this), { passive: false });
+      window.addEventListener('touchmove', this.onDragMove.bind(this), { passive: false });
+      window.addEventListener('touchend', this.onDragEnd.bind(this));
+    }
+
+    getAngleFromEvent(event) {
+      const rect = this.canvas.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+
+      let clientX, clientY;
+      if (event.touches && event.touches.length > 0) {
+        clientX = event.touches[0].clientX;
+        clientY = event.touches[0].clientY;
+      } else {
+        clientX = event.clientX;
+        clientY = event.clientY;
+      }
+
+      return Math.atan2(clientY - centerY, clientX - centerX) * 180 / Math.PI;
+    }
+
+    onDragStart(event) {
+      event.preventDefault();
+      this.isDragging = true;
+      this.velocity = 0;
+      this.lastAngle = this.getAngleFromEvent(event);
+      this.lastTime = performance.now();
+      this.velocitySamples = [];
+      this.canvas.classList.add('dragging');
+    }
+
+    onDragMove(event) {
+      if (!this.isDragging) return;
+      event.preventDefault();
+
+      const currentAngle = this.getAngleFromEvent(event);
+      const currentTime = performance.now();
+
+      // Calculate delta (handle wrap-around)
+      let delta = currentAngle - this.lastAngle;
+      if (delta > 180) delta -= 360;
+      if (delta < -180) delta += 360;
+
+      // Update dial angle
+      this.dialAngle += delta;
+
+      // Track velocity (degrees per second)
+      const dt = (currentTime - this.lastTime) / 1000;
+      if (dt > 0) {
+        const instantVelocity = delta / dt;
+        this.velocitySamples.push(instantVelocity);
+        if (this.velocitySamples.length > 5) {
+          this.velocitySamples.shift();
+        }
+      }
+
+      // Apply adjustment via ratio
+      const cannonDelta = delta / this.ratio;
+      if (this.onAdjust) {
+        this.onAdjust(cannonDelta);
+      }
+
+      this.lastAngle = currentAngle;
+      this.lastTime = currentTime;
+      this.render();
+    }
+
+    onDragEnd() {
+      if (!this.isDragging) return;
+      this.isDragging = false;
+      this.canvas.classList.remove('dragging');
+
+      // Calculate release velocity from samples
+      if (this.velocitySamples.length > 0) {
+        const avgVelocity = this.velocitySamples.reduce((a, b) => a + b, 0) / this.velocitySamples.length;
+        this.velocity = Math.max(-this.maxVelocity, Math.min(this.maxVelocity, avgVelocity));
+      }
+    }
+
+    update(dt) {
+      if (this.isDragging || Math.abs(this.velocity) < this.minVelocity) {
+        if (!this.isDragging) this.velocity = 0;
+        return;
+      }
+
+      // Apply inertia
+      const deltaDial = this.velocity * dt;
+      this.dialAngle += deltaDial;
+
+      // Apply cannon adjustment
+      const cannonDelta = deltaDial / this.ratio;
+      if (this.onAdjust && Math.abs(cannonDelta) > 0.01) {
+        this.onAdjust(cannonDelta);
+      }
+
+      // Apply friction
+      this.velocity *= this.friction;
+
+      this.render();
+    }
+
+    render() {
+      const ctx = this.ctx;
+      const size = this.size;
+      const center = size / 2;
+      const radius = (size / 2) - 8;
+
+      ctx.clearRect(0, 0, size, size);
+
+      // Draw outer track ring
+      ctx.beginPath();
+      ctx.arc(center, center, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      // Draw notch marks (12 notches)
+      const notchCount = 12;
+      for (let i = 0; i < notchCount; i++) {
+        const angle = (i / notchCount) * Math.PI * 2 - Math.PI / 2;
+        const innerR = radius - 10;
+        const outerR = radius - 4;
+
+        ctx.beginPath();
+        ctx.moveTo(center + Math.cos(angle) * innerR, center + Math.sin(angle) * innerR);
+        ctx.lineTo(center + Math.cos(angle) * outerR, center + Math.sin(angle) * outerR);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // Draw rotating indicator
+      const indicatorAngle = (this.dialAngle * Math.PI / 180) - Math.PI / 2;
+      ctx.beginPath();
+      ctx.moveTo(center, center);
+      ctx.lineTo(
+        center + Math.cos(indicatorAngle) * (radius - 15),
+        center + Math.sin(indicatorAngle) * (radius - 15)
+      );
+      ctx.strokeStyle = '#fc8';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+
+      // Draw center dot
+      ctx.beginPath();
+      ctx.arc(center, center, 10, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.fill();
+      ctx.strokeStyle = '#fc8';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    setRatio(ratio) { this.ratio = ratio; }
+    setFriction(friction) { this.friction = friction; }
+    reset() { this.dialAngle = 0; this.velocity = 0; this.render(); }
+  }
+
+  // Dial state
+  let dialControl = null;
+  let currentMode = 'rotation';
 
   let currentPanel = null;
   let onHideCallback = null;
@@ -357,21 +568,25 @@ export function createGameUI() {
 
     if (isCannonPanel) {
       const titleEl = document.getElementById('cannonPanelTitle');
-      const rotationRow = document.getElementById('cannonRotationRow');
-      const elevationRow = document.getElementById('cannonElevationRow');
+      const modeLabel = document.getElementById('dialModeLabel');
 
       if (panelType === 'cannon-rotation') {
         titleEl.textContent = 'Cannon Rotation';
-        rotationRow.style.display = 'flex';
-        elevationRow.style.display = 'none';
+        modeLabel.textContent = 'Rotation';
+        currentMode = 'rotation';
       } else if (panelType === 'cannon-elevation') {
         titleEl.textContent = 'Cannon Elevation';
-        rotationRow.style.display = 'none';
-        elevationRow.style.display = 'flex';
+        modeLabel.textContent = 'Elevation';
+        currentMode = 'elevation';
       } else {
         titleEl.textContent = 'Cannon Adjust';
-        rotationRow.style.display = 'flex';
-        elevationRow.style.display = 'flex';
+        modeLabel.textContent = 'Rotation';
+        currentMode = 'rotation';
+      }
+
+      // Reset dial on show
+      if (dialControl) {
+        dialControl.reset();
       }
     }
 
@@ -413,29 +628,48 @@ export function createGameUI() {
         break: getActive('shotBreak') || 'roll'
       };
     },
-    // Setup cannon controls with callbacks
-    setupCannonControls(onRotLeft, onRotRight, onElevUp, onElevDown, updateDisplay) {
-      document.getElementById('gameRotLeft').addEventListener('click', () => {
-        onRotLeft();
-        updateDisplay();
+    // Setup dial control with callbacks
+    setupDialControl(onRotation, onElevation, updateDisplay) {
+      const canvas = document.getElementById('dialCanvas');
+      if (!canvas) return;
+
+      dialControl = new DialControl(canvas, {
+        size: DIAL.size,
+        ratio: DIAL.ratio,
+        friction: DIAL.friction,
+        minVelocity: DIAL.minVelocity,
+        maxVelocity: DIAL.maxVelocity
       });
-      document.getElementById('gameRotRight').addEventListener('click', () => {
-        onRotRight();
+
+      dialControl.onAdjust = (delta) => {
+        if (currentMode === 'rotation') {
+          onRotation(delta);
+        } else {
+          onElevation(delta);
+        }
         updateDisplay();
-      });
-      document.getElementById('gameElevUp').addEventListener('click', () => {
-        onElevUp();
-        updateDisplay();
-      });
-      document.getElementById('gameElevDown').addEventListener('click', () => {
-        onElevDown();
-        updateDisplay();
-      });
+      };
+    },
+    // Update dial in animation loop (for inertia)
+    updateDial(dt) {
+      if (dialControl && overlay.style.display !== 'none') {
+        dialControl.update(dt);
+      }
+    },
+    // Runtime dial config setters
+    setDialRatio(ratio) {
+      if (dialControl) dialControl.setRatio(ratio);
+    },
+    setDialFriction(friction) {
+      if (dialControl) dialControl.setFriction(friction);
     },
     // Update cannon display values
     updateCannonDisplay(rotation, elevation) {
-      document.getElementById('gameRotationValue').textContent = `${rotation}°`;
-      document.getElementById('gameElevationValue').textContent = `${elevation}°`;
+      const valueDisplay = document.getElementById('dialValueDisplay');
+      if (valueDisplay) {
+        const value = currentMode === 'rotation' ? rotation : elevation;
+        valueDisplay.textContent = `${Math.round(value)}°`;
+      }
     }
   };
 }
